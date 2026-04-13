@@ -1,0 +1,1236 @@
+/* ===== HOME PAGE - ADVANCE PREMIUM HINDU DHARMIK DESIGN ===== */
+
+.home-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: rgba(26, 10, 0, 0.92);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  padding: 0 40px;
+  border-bottom: 2px solid rgba(212, 160, 23, 0.3);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+  transition: all 0.4s;
+}
+
+.home-nav.scrolled {
+  background: rgba(26, 10, 0, 0.98);
+  height: 65px;
+}
+
+.home-nav::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(212, 160, 23, 0.05), transparent);
+  pointer-events: none;
+}
+
+.home-nav-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 80px;
+}
+
+.om-symbol-nav {
+  font-size: 36px;
+  color: var(--gold-light);
+  animation: omGlow 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
+}
+
+@keyframes omGlow {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5)); }
+  50% { filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.8)); }
+}
+
+.home-nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: white;
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 22px;
+  font-weight: 700;
+  text-decoration: none;
+  letter-spacing: 2px;
+  transition: all 0.3s;
+}
+
+.home-nav-logo:hover {
+  transform: scale(1.03);
+}
+
+.home-nav-logo:hover span:last-child {
+  color: var(--gold-light);
+}
+
+.home-nav-links {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.home-nav-links a {
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  padding: 12px 22px;
+  border-radius: 30px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.home-nav-links a::before {
+  content: 'ॐ';
+  position: absolute;
+  left: 8px;
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.home-nav-links a:hover {
+  color: var(--gold-light);
+  background: rgba(212, 160, 23, 0.1);
+}
+
+.home-nav-links a:hover::before {
+  opacity: 0.6;
+}
+
+.admin-nav-btn {
+  background: linear-gradient(135deg, var(--saffron), #E8820C);
+  color: white !important;
+  padding: 12px 28px;
+  border-radius: 30px;
+  margin-left: 18px;
+  font-weight: 600 !important;
+  box-shadow: 0 6px 25px rgba(255, 153, 51, 0.4);
+}
+
+.admin-nav-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 35px rgba(255, 153, 51, 0.5);
+}
+
+.mobile-menu-toggle {
+  display: none;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 8px;
+  z-index: 1001;
+}
+
+/* ===== HERO SECTION - PREMIUM DHARMIK ===== */
+.hero-section {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, var(--dark) 0%, #1a0805 50%, #0D0402 100%);
+  overflow: hidden;
+}
+
+.hero-bg-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: url('../temple.webp');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.2;
+  filter: blur(1px) brightness(0.4);
+}
+
+.hero-bg-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, 
+    rgba(26, 10, 0, 0.85) 0%, 
+    rgba(26, 10, 0, 0.7) 50%, 
+    rgba(13, 4, 2, 0.9) 100%
+  );
+}
+
+.hero-glow {
+  position: absolute;
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(circle, rgba(255, 153, 51, 0.12) 0%, rgba(128, 0, 0, 0.08) 40%, transparent 70%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: glowPulse 5s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+  50% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+}
+
+.hero-pattern {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 15% 85%, rgba(212, 160, 23, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 85% 15%, rgba(255, 153, 51, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(128, 0, 0, 0.05) 0%, transparent 50%),
+    url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50 0L55 20L75 15L60 30L80 40L55 45L70 65L45 55L50 80L40 55L20 65L35 45L10 40L30 30L20 15L40 20Z' fill='%23D4A017' fill-opacity='0.04'/%3E%3C/svg%3E");
+  opacity: 0.9;
+}
+
+.mandal-bg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 600px;
+  height: 600px;
+  transform: translate(-50%, -50%);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Ccircle cx='100' cy='100' r='95' fill='none' stroke='%23D4A017' stroke-width='0.5' opacity='0.1'/%3E%3Ccircle cx='100' cy='100' r='80' fill='none' stroke='%23D4A017' stroke-width='0.5' opacity='0.1'/%3E%3Ccircle cx='100' cy='100' r='65' fill='none' stroke='%23D4A017' stroke-width='0.5' opacity='0.1'/%3E%3Ccircle cx='100' cy='100' r='50' fill='none' stroke='%23D4A017' stroke-width='0.5' opacity='0.1'/%3E%3Cpath d='M100 5 L100 195 M5 100 L195 100' stroke='%23D4A017' stroke-width='0.5' opacity='0.08'/%3E%3Cpath d='M30 30 L170 170 M170 30 L30 170' stroke='%23D4A017' stroke-width='0.5' opacity='0.08'/%3E%3C/svg%3E");
+  opacity: 0.15;
+  animation: mandalaRotate 60s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes mandalaRotate {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.diya-container {
+  position: absolute;
+  bottom: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.diya {
+  width: 40px;
+  height: 20px;
+  background: linear-gradient(180deg, #8B4513, #5D3A1A);
+  border-radius: 0 0 50% 50%;
+  position: relative;
+}
+
+.diya::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 12px;
+  background: linear-gradient(180deg, #FF9933, #FFD700);
+  border-radius: 50%;
+  animation: flicker 0.5s ease-in-out infinite alternate;
+}
+
+.diya-light {
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.4) 0%, transparent 70%);
+  animation: lightPulse 2s ease-in-out infinite;
+}
+
+@keyframes flicker {
+  from { opacity: 0.8; transform: translateX(-50%) scaleY(1); }
+  to { opacity: 1; transform: translateX(-50%) scaleY(1.1); }
+}
+
+@keyframes lightPulse {
+  0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.5; }
+  50% { transform: translateX(-50%) scale(1.2); opacity: 0.8; }
+}
+
+.hero-border {
+  position: absolute;
+  top: 25px;
+  left: 25px;
+  right: 25px;
+  bottom: 25px;
+  border: 2px solid rgba(212, 160, 23, 0.15);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.corner-ornament {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--gold);
+  opacity: 0.4;
+}
+
+.corner-ornament.top-left { top: -5px; left: -5px; border-right: none; border-bottom: none; border-radius: 4px 0 0 0; }
+.corner-ornament.top-right { top: -5px; right: -5px; border-left: none; border-bottom: none; border-radius: 0 4px 0 0; }
+.corner-ornament.bottom-left { bottom: -5px; left: -5px; border-right: none; border-top: none; border-radius: 0 0 0 4px; }
+.corner-ornament.bottom-right { bottom: -5px; right: -5px; border-left: none; border-top: none; border-radius: 0 0 4px 0; }
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.om-premium {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 30px;
+  margin-top: 60px;
+}
+
+.om-main {
+  font-size: 100px;
+  display: block;
+  color: var(--gold-light);
+  animation: omFloat 4s ease-in-out infinite, omShine 3s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 40px rgba(255, 215, 0, 0.6));
+  line-height: 1;
+}
+
+.hero-english-title {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: clamp(28px, 5vw, 52px);
+  color: white;
+  font-weight: 700;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, var(--gold-light), var(--saffron), var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 4px;
+  text-align: center;
+}
+
+.hero-subtitle {
+  font-family: 'Tiro Devanagari Hindi', serif;
+  font-size: clamp(18px, 2.5vw, 22px);
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.hero-description {
+  font-family: 'Tiro Devanagari Hindi', serif;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  max-width: 650px;
+  margin: 0 auto 36px;
+  line-height: 1.8;
+  padding: 20px 30px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  border: 1px solid rgba(212, 160, 23, 0.1);
+  text-align: center;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.om-premium {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 20px;
+  margin-top: 40px;
+}
+
+.om-main {
+  font-size: 130px;
+  display: block;
+  color: var(--gold-light);
+  animation: omFloat 4s ease-in-out infinite, omShine 3s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 50px rgba(255, 215, 0, 0.6));
+  line-height: 1;
+}
+
+@keyframes omFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-15px); }
+}
+
+@keyframes omShine {
+  from { filter: drop-shadow(0 0 40px rgba(255, 215, 0, 0.5)); }
+  to { filter: drop-shadow(0 0 70px rgba(255, 215, 0, 0.8)); }
+}
+
+.om-garland {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 200px;
+  height: 200px;
+  pointer-events: none;
+}
+
+.garland-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--gold);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--gold);
+}
+
+.garland-dot:nth-child(1) { top: 0; left: 50%; }
+.garland-dot:nth-child(2) { top: 10%; left: 80%; }
+.garland-dot:nth-child(3) { top: 35%; left: 95%; }
+.garland-dot:nth-child(4) { top: 65%; left: 95%; }
+.garland-dot:nth-child(5) { top: 90%; left: 80%; }
+.garland-dot:nth-child(6) { top: 100%; left: 50%; }
+.garland-dot:nth-child(7) { top: 90%; left: 20%; }
+.garland-dot:nth-child(8) { top: 65%; left: 5%; }
+.garland-dot:nth-child(9) { top: 35%; left: 5%; }
+.garland-dot:nth-child(10) { top: 10%; left: 20%; }
+.garland-dot:nth-child(11) { top: -5%; left: 35%; }
+.garland-dot:nth-child(12) { top: -5%; left: 65%; }
+
+/* ===== GOLD PARTICLES ===== */
+.particles-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: var(--gold-light);
+  border-radius: 50%;
+  opacity: 0;
+  box-shadow: 0 0 8px var(--gold-light);
+  animation: particleFloat linear infinite;
+}
+
+.particle:nth-child(1) { left: 5%; animation-duration: 8s; animation-delay: 0s; }
+.particle:nth-child(2) { left: 15%; animation-duration: 12s; animation-delay: 1s; }
+.particle:nth-child(3) { left: 25%; animation-duration: 7s; animation-delay: 2s; }
+.particle:nth-child(4) { left: 35%; animation-duration: 10s; animation-delay: 0.5s; }
+.particle:nth-child(5) { left: 45%; animation-duration: 9s; animation-delay: 3s; }
+.particle:nth-child(6) { left: 55%; animation-duration: 11s; animation-delay: 1.5s; }
+.particle:nth-child(7) { left: 65%; animation-duration: 8s; animation-delay: 2.5s; }
+.particle:nth-child(8) { left: 75%; animation-duration: 13s; animation-delay: 0.3s; }
+.particle:nth-child(9) { left: 85%; animation-duration: 7s; animation-delay: 3.5s; }
+.particle:nth-child(10) { left: 95%; animation-duration: 10s; animation-delay: 1.8s; }
+.particle:nth-child(11) { left: 10%; animation-duration: 9s; animation-delay: 2.2s; }
+.particle:nth-child(12) { left: 50%; animation-duration: 11s; animation-delay: 0.8s; }
+.particle:nth-child(13) { left: 70%; animation-duration: 8s; animation-delay: 4s; }
+.particle:nth-child(14) { left: 30%; animation-duration: 12s; animation-delay: 1.2s; }
+.particle:nth-child(15) { left: 90%; animation-duration: 7s; animation-delay: 3.2s; }
+.particle:nth-child(16) { left: 20%; animation-duration: 10s; animation-delay: 2.8s; }
+.particle:nth-child(17) { left: 60%; animation-duration: 9s; animation-delay: 0.6s; }
+.particle:nth-child(18) { left: 40%; animation-duration: 11s; animation-delay: 1.7s; }
+.particle:nth-child(19) { left: 80%; animation-duration: 8s; animation-delay: 3.8s; }
+.particle:nth-child(20) { left: 12%; animation-duration: 13s; animation-delay: 2.3s; }
+.particle:nth-child(21) { left: 8%; animation-duration: 9s; animation-delay: 1s; }
+.particle:nth-child(22) { left: 35%; animation-duration: 11s; animation-delay: 2.5s; }
+.particle:nth-child(23) { left: 55%; animation-duration: 8s; animation-delay: 0.4s; }
+.particle:nth-child(24) { left: 78%; animation-duration: 12s; animation-delay: 3s; }
+.particle:nth-child(25) { left: 92%; animation-duration: 10s; animation-delay: 1.6s; }
+
+@keyframes particleFloat {
+  0% { bottom: -10%; opacity: 0; transform: scale(0.3); }
+  10% { opacity: 0.9; }
+  90% { opacity: 0.3; }
+  100% { bottom: 110%; opacity: 0; transform: scale(1); }
+}
+
+/* ===== STATS SECTION ===== */
+.stats-section {
+  background: linear-gradient(180deg, #fff 0%, var(--cream) 100%);
+  padding: 100px 40px;
+  position: relative;
+  border-top: 4px solid var(--gold);
+  border-bottom: 4px solid var(--gold);
+  overflow: hidden;
+}
+
+.stats-section::before {
+  content: '';
+  position: absolute;
+  top: -30%;
+  left: -15%;
+  width: 40%;
+  height: 160%;
+  background: radial-gradient(circle, rgba(212, 160, 23, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.section-header-center {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.section-header-center h2 {
+  font-family: 'Tiro Devanagari Hindi', serif;
+  color: var(--maroon);
+  font-size: clamp(28px, 3.5vw, 42px);
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.stats-grid {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 30px;
+}
+
+.premium-stat {
+  text-align: center;
+  padding: 45px 28px;
+  background: white;
+  border-radius: 24px;
+  border: 2px solid rgba(212, 160, 23, 0.2);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.premium-stat::before {
+  content: 'ॐ';
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  font-size: 80px;
+  color: var(--gold);
+  opacity: 0.05;
+}
+
+.premium-stat::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, var(--maroon), var(--gold), var(--saffron));
+}
+
+.stat-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.6s;
+}
+
+.premium-stat:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 25px 60px rgba(212, 160, 23, 0.25);
+  border-color: var(--gold);
+}
+
+.premium-stat:hover .stat-shine {
+  left: 100%;
+}
+
+.stat-icon-wrapper {
+  font-size: 48px;
+  margin-bottom: 18px;
+  display: block;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1));
+}
+
+.stat-number {
+  font-family: 'Playfair Display', serif;
+  font-size: 44px;
+  font-weight: 900;
+  color: var(--maroon);
+  display: block;
+}
+
+.stat-label {
+  color: #666;
+  font-size: 16px;
+  margin-top: 12px;
+  font-weight: 500;
+  font-family: 'Tiro Devanagari Hindi', serif;
+}
+
+/* ===== NOTIFICATION BOARD ===== */
+.notifications-section {
+  background: linear-gradient(135deg, var(--dark) 0%, #1a0805 100%);
+  padding: 60px 40px;
+  position: relative;
+  border-bottom: 2px solid var(--gold);
+}
+
+.notifications-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 153, 51, 0.05) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.notification-board {
+  max-width: 800px;
+  margin: 0 auto;
+  background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+  border: 2px solid var(--gold);
+  border-radius: 20px;
+  padding: 30px;
+  position: relative;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.notification-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.notification-header h3 {
+  font-family: 'Tiro Devanagari Hindi', serif;
+  color: var(--gold-light);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.om-mini {
+  font-size: 28px;
+  color: var(--gold);
+  filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
+}
+
+.notification-content {
+  text-align: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.notification-badge {
+  display: inline-block;
+  padding: 6px 20px;
+  background: linear-gradient(135deg, var(--saffron), var(--gold));
+  color: white;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+}
+
+.notification-active p {
+  font-family: 'Tiro Devanagari Hindi', serif;
+  font-size: 20px;
+  color: white;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.notification-date {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.notification-dots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.notif-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.notif-dot.active {
+  background: var(--gold);
+  box-shadow: 0 0 10px var(--gold);
+}
+
+.notif-dot:hover {
+  background: var(--gold-light);
+}
+
+.notification-border {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  right: 15px;
+  bottom: 15px;
+  border: 1px solid rgba(212, 160, 23, 0.3);
+  border-radius: 14px;
+  pointer-events: none;
+}
+
+/* ===== COMMITTEE ===== */
+.committee-section {
+  padding: 100px 40px;
+  background: var(--bg);
+  position: relative;
+}
+
+.committee-grid {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
+}
+
+.committee-card {
+  background: white;
+  border-radius: 24px;
+  padding: 40px;
+  text-align: center;
+  border: 1px solid var(--border);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.committee-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, var(--maroon), var(--gold), var(--saffron));
+}
+
+.committee-card::after {
+  content: 'ॐ';
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 40px;
+  color: var(--gold);
+  opacity: 0.08;
+}
+
+.committee-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 25px 60px rgba(128, 0, 0, 0.15);
+  border-color: var(--gold);
+}
+
+.committee-avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+  border: 3px solid var(--gold);
+  box-shadow: 0 8px 25px rgba(128, 0, 0, 0.3);
+}
+
+.committee-avatar-initials {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, var(--maroon), var(--deep-maroon));
+  border: 3px solid var(--gold);
+  box-shadow: 0 8px 25px rgba(128, 0, 0, 0.3);
+  font-family: 'Playfair Display', serif;
+  text-transform: uppercase;
+  transition: all 0.3s;
+}
+
+.committee-card:hover .committee-avatar-initials {
+  transform: scale(1.05);
+  box-shadow: 0 12px 35px rgba(128, 0, 0, 0.4);
+}
+
+.committee-name {
+  font-family: 'Tiro Devanagari Hindi', serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--maroon);
+  margin-bottom: 10px;
+}
+
+.committee-designation {
+  display: inline-block;
+  padding: 8px 20px;
+  background: linear-gradient(135deg, var(--gold), var(--saffron));
+  color: white;
+  border-radius: 25px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 18px;
+  letter-spacing: 1px;
+  box-shadow: 0 5px 20px rgba(212, 160, 23, 0.35);
+}
+
+.committee-phone {
+  color: #666;
+  font-size: 15px;
+}
+
+.committee-phone a {
+  color: var(--maroon);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.3s;
+}
+
+.committee-phone a:hover {
+  color: var(--gold);
+  text-decoration: underline;
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.section-header h2 {
+  font-family: 'Tiro Devanagari Hindi', serif;
+  font-size: clamp(28px, 3.5vw, 44px);
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: var(--maroon);
+}
+
+.section-header p {
+  color: #888;
+  font-size: 18px;
+}
+
+/* ===== ABOUT - DHARMIK ===== */
+.about-section {
+  padding: 100px 40px;
+  background: linear-gradient(180deg, var(--dark) 0%, #0A0302 100%);
+  position: relative;
+  border-top: 3px solid rgba(212, 160, 23, 0.3);
+  overflow: hidden;
+}
+
+.about-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 25% 75%, rgba(212, 160, 23, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 75% 25%, rgba(255, 153, 51, 0.07) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.about-section h2,
+.about-section .section-header h2 {
+  color: white;
+}
+
+.about-section .section-header p {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.about-grid {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 30px;
+}
+
+.dharmik-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  padding: 48px 32px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+}
+
+.card-om {
+  position: absolute;
+  top: 10px;
+  left: 20px;
+  font-size: 50px;
+  color: var(--gold);
+  opacity: 0.08;
+}
+
+.dharmik-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 30px;
+  right: 30px;
+  height: 3px;
+  background: linear-gradient(to right, transparent, var(--gold), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.dharmik-card:hover::before { 
+  opacity: 1; 
+}
+
+.dharmik-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-10px);
+  border-color: rgba(212, 160, 23, 0.4);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+}
+
+.dharmik-card .card-icon {
+  font-size: 44px;
+  margin-bottom: 24px;
+  display: block;
+  filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.3));
+}
+
+.dharmik-card h3 {
+  color: var(--gold-light);
+  font-family: 'Tiro Devanagari Hindi', serif;
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.dharmik-card p {
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.9;
+  font-size: 16px;
+}
+
+.info-section {
+  padding: 80px 40px;
+  background: linear-gradient(135deg, var(--cream) 0%, #fff 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.info-section-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: url('../temple.webp');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.06;
+  pointer-events: none;
+}
+
+.info-section .section-header {
+  position: relative;
+  z-index: 1;
+}
+
+.info-section .info-container {
+  position: relative;
+  z-index: 1;
+}
+
+.info-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 30px;
+}
+
+.info-temple, .info-matrimony, .info-education, .info-medical {
+  background: white;
+  border-radius: 20px;
+  padding: 35px;
+  text-align: center;
+  border: 1px solid var(--border);
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.info-temple::before, .info-matrimony::before, .info-education::before, .info-medical::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--maroon), var(--gold));
+}
+
+.info-temple:hover, .info-matrimony:hover, .info-education:hover, .info-medical:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 15px 40px rgba(128, 0, 0, 0.12);
+}
+
+.temple-icon, .matrimony-icon, .education-icon, .medical-icon {
+  font-size: 50px;
+  margin-bottom: 20px;
+}
+
+.info-temple h3, .info-matrimony h3, .info-education h3, .info-medical h3 {
+  font-family: 'Tiro Devanagari Hindi', serif;
+  font-size: 22px;
+  color: var(--maroon);
+  margin-bottom: 12px;
+}
+
+.info-temple p, .info-matrimony p, .info-education p, .info-medical p {
+  color: #666;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* ===== FOOTER ===== */
+.home-footer {
+  background: var(--dark);
+  padding: 50px 40px;
+  text-align: center;
+  border-top: 2px solid rgba(212, 160, 23, 0.3);
+  position: relative;
+}
+
+.home-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+
+.footer-om {
+  font-size: 48px;
+  color: var(--gold);
+  margin-bottom: 20px;
+  filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.4));
+  animation: omGlow 3s ease-in-out infinite;
+}
+
+.home-footer p {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.home-footer a {
+  color: var(--saffron);
+  text-decoration: none;
+  transition: all 0.3s;
+}
+
+.home-footer a:hover {
+  color: var(--gold-light);
+}
+
+.footer-mantra {
+  font-family: 'Tiro Devanagari Hindi', serif;
+  font-size: 16px !important;
+  color: var(--gold) !important;
+  margin-top: 20px !important;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .home-nav { 
+    padding: 0 16px; 
+    height: 65px;
+  }
+  .home-nav-inner {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .mobile-menu-toggle {
+    display: block;
+  }
+  .home-nav-logo { 
+    font-size: 16px; 
+    gap: 8px;
+  }
+  .om-symbol-nav { font-size: 24px; }
+  .home-nav-links { 
+    display: none;
+    position: absolute;
+    top: 65px;
+    left: 0;
+    right: 0;
+    background: rgba(26, 10, 0, 0.98);
+    flex-direction: column;
+    padding: 16px;
+    gap: 8px;
+    border-bottom: 2px solid var(--gold);
+  }
+  .home-nav-links.open {
+    display: flex;
+  }
+  .home-nav-links a {
+    padding: 12px 16px;
+    text-align: center;
+  }
+  .admin-nav-btn {
+    margin-left: 0;
+    text-align: center;
+    margin-top: 8px;
+  }
+  
+  .hero-section {
+    min-height: 100vh;
+    padding: 80px 16px 40px;
+  }
+  
+  .om-main { font-size: 70px; margin-top: 20px; }
+  .hero-english-title { font-size: 24px; letter-spacing: 2px; }
+  .hero-subtitle { font-size: 12px; letter-spacing: 2px; }
+  .hero-description { 
+    font-size: 14px; 
+    padding: 16px 20px;
+    line-height: 1.6;
+  }
+  .hero-actions { 
+    flex-direction: column; 
+    align-items: center; 
+    gap: 12px;
+    width: 100%;
+  }
+  .hero-actions .btn-primary,
+  .hero-actions .btn-secondary {
+    width: 100%;
+    max-width: 250px;
+    justify-content: center;
+  }
+  
+  .stats-section, .committee-section, .about-section, .notifications-section { 
+    padding: 50px 16px; 
+  }
+  
+  .stats-grid, .committee-grid, .about-grid, .info-container { 
+    grid-template-columns: 1fr; 
+    gap: 16px;
+  }
+  .stat-card, .premium-stat { 
+    padding: 24px 16px; 
+  }
+  .stat-number { font-size: 28px; }
+  .stat-icon-wrapper { font-size: 36px; }
+  
+  .committee-card { 
+    padding: 24px 16px; 
+  }
+  .committee-avatar {
+    width: 80px;
+    height: 80px;
+    font-size: 28px;
+  }
+  .committee-name { font-size: 18px; }
+  
+  .dharmik-card { 
+    padding: 24px 16px; 
+  }
+  .dharmik-card h3 { font-size: 20px; }
+  .dharmik-card p { font-size: 14px; }
+  
+  .notification-board { 
+    padding: 16px; 
+  }
+  .notification-header h3 { font-size: 18px; }
+  .notification-active p { font-size: 15px; }
+  .om-mini { font-size: 20px; }
+  
+  .section-header h2 { font-size: 24px; }
+  .section-header p { font-size: 14px; }
+  
+  .info-section { padding: 40px 16px; }
+  .info-temple, .info-matrimony, .info-education, .info-medical {
+    padding: 24px 16px;
+  }
+  
+  .home-footer { 
+    padding: 30px 16px; 
+  }
+  .footer-om { font-size: 36px; }
+  .footer-mantra { font-size: 14px !important; }
+}
+
+@media (max-width: 480px) {
+  .hero-section { min-height: 95vh; }
+  .om-main { font-size: 55px; }
+  .hero-english-title { font-size: 20px; }
+  .hero-subtitle { font-size: 11px; letter-spacing: 1px; }
+  .hero-description { font-size: 13px; }
+  .mandal-bg { width: 250px; height: 250px; }
+  
+  .stat-card, .premium-stat { padding: 20px 14px; }
+  .stat-number { font-size: 24px; }
+  .stat-label { font-size: 13px; }
+  
+  .about-card { padding: 20px 14px; }
+  .about-card h3 { font-size: 18px; }
+  .about-card p { font-size: 13px; }
+  
+  .info-container { grid-template-columns: 1fr; }
+}
