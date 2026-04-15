@@ -260,27 +260,24 @@ function Home() {
             const initials = getInitials(member.name || member.position);
             const hasName = member.name && member.name.trim() !== '';
             const hasPhoto = member.photo && member.photo.trim() !== '';
+            const imgSrc = hasPhoto ? getDirectImageUrl(member.photo) : '';
             return (
               <div className="committee-card" key={member.id}>
-                {hasPhoto ? (
+                {hasPhoto && imgSrc ? (
                   <img
-                    src={getDirectImageUrl(member.photo)}
+                    src={imgSrc}
                     alt={member.name || member.position}
                     className="committee-avatar"
+                    loading="lazy"
                     onError={(e) => {
-                      console.warn(`[Committee] Failed to load image for ${member.name || member.position}:`, member.photo);
-                      e.target.style.display = 'none';
-                      const placeholder = e.target.parentElement.querySelector('.committee-avatar-initials');
-                      if (placeholder) placeholder.style.display = 'flex';
+                      console.warn('[SVAKS] Image failed:', member.photo, '→', imgSrc);
+                      e.target.onerror = null; // prevent infinite loop
+                      e.target.src = PLACEHOLDER_IMAGE;
                     }}
                   />
-                ) : null}
-                <div
-                  className="committee-avatar-initials"
-                  style={{ display: hasPhoto ? 'none' : 'flex' }}
-                >
-                  {initials}
-                </div>
+                ) : (
+                  <div className="committee-avatar-initials">{initials}</div>
+                )}
                 {hasName && (
                   <div className="committee-name">{member.name}</div>
                 )}

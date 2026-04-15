@@ -93,7 +93,7 @@ function loadFromStorage() {
       };
     }
   } catch (e) {
-    console.error('Error loading from localStorage:', e);
+    console.error('[SVAKS] localStorage load error:', e);
   }
   return {
     members: [],
@@ -109,47 +109,60 @@ function saveToStorage(data) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
-    console.error('Error saving to localStorage:', e);
+    console.error('[SVAKS] localStorage save error:', e);
   }
-}
-
-/** Send data to Google Sheets via Apps Script (fire-and-forget, no-cors) */
-async function postDataToSheets(sheetUrl, data) {
-  await fetch(sheetUrl, {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(data)
-  });
-}
-
-/** Load data from Google Sheets via Apps Script GET endpoint */
-async function getDataFromSheets(sheetUrl) {
-  const loadUrl = sheetUrl.includes('/load') ? sheetUrl : sheetUrl.replace(/\/exec.*/, '/exec') + '/load';
-  const response = await fetch(loadUrl);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
 }
 
 export function DataProvider({ children }) {
   const [data, setData] = useState(loadFromStorage);
-  const [syncStatus, setSyncStatus] = useState('idle'); // idle | syncing | synced | error
+  const [syncStatus, setSyncStatus] = useState('idle'); // idle | loading | syncing | synced | error
+  const [syncError, setSyncError] = useState('');
+  const [syncLastTime, setSyncLastTime] = useState(null);
   const [sheetsLoaded, setSheetsLoaded] = useState(false);
   const syncTimeoutRef = useRef(null);
-  const isInitialMountRef = useRef(true);
+  const hasAutoSyncedRef = useRef(false);
 
-  // ========== AUTO-LOAD FROM GOOGLE SHEETS ON START ==========
+  // ========== STEP 1: AUTO-LOAD FROM GOOGLE SHEETS ON START ==========
   useEffect(() => {
     if (sheetsLoaded) return;
     const sheetUrl = data.settings?.sheetUrl;
-    if (!sheetUrl) { setSheetsLoaded(true); return; }
+    if (!sheetUrl) {
+      setSyncStatus('idle');
+      setSheetsLoaded(true);
+      return;
+    }
 
-    const tryLoadFromSheets = async () => {
+    let cancelled = false;
+    setSyncStatus('loading');
+
+    (async () => {
       try {
-        console.log('[SVAKS] Loading from Google Sheets...');
-        const sheetData = await getDataFromSheets(sheetUrl);
-        if (sheetData && (sheetData.members?.length > 0 || sheetData.committee?.some(c => c.name))) {
-          console.log('[SVAKS] Loaded from Google Sheets');
+        const loadUrl = sheetUrl.includes('/load') ? sheetUrl : sheetUrl.replace(/\/exec.*/, '/exec') + '/load';
+        console.log('[SVAKS] Loading from Sheets:', loadUrl);
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 15000);
+
+        const response = await fetch(loadUrl, { signal: controller.signal });
+        clearTimeout(timer);
+
+        if (cancelled) return;
+
+        if (!response.ok) {
+          console.warn('[SVAKS] Sheets returned', response.status, '- using localStorage');
+          if (!cancelled) { setSheetsLoaded(true); setSyncStatus('idle'); }
+          return;
+        }
+
+        const sheetData = await response.json();
+        if (cancelled) return;
+
+        // Check if there's actually data in Sheets
+        const hasData = (sheetData.members && sheetData.members.length > 0) ||
+          (sheetData.committee && sheetData.committee.some(c => c.name));
+
+        if (hasData) {
+          console.log('[SVAKS] ✅ Loaded', sheetData.members?.length || 0, 'members from Sheets');
           setData({
             members: sheetData.members || [],
             collections: sheetData.collections || [],
@@ -160,94 +173,143 @@ export function DataProvider({ children }) {
           });
           setSyncStatus('synced');
         } else {
-          console.log('[SVAKS] No data in Sheets, using localStorage');
+          console.log('[SVAKS] Sheets empty, using localStorage data');
+          setSyncStatus('idle');
         }
       } catch (e) {
-        console.warn('[SVAKS] Sheets load failed, using localStorage:', e.message);
+        if (cancelled) return;
+        console.warn('[SVAKS] Sheets load failed:', e.message, '- using localStorage');
+        setSyncStatus('idle');
       }
-      setSheetsLoaded(true);
-    };
+      if (!cancelled) setSheetsLoaded(true);
+    })();
 
-    const timer = setTimeout(tryLoadFromSheets, 300);
-    return () => clearTimeout(timer);
+    return () => { cancelled = true; };
   }, [data.settings?.sheetUrl, sheetsLoaded]);
 
-  // ========== AUTO-SAVE TO LOCALSTORAGE ==========
+  // ========== STEP 2: ALWAYS SAVE TO LOCALSTORAGE (instant cache) ==========
   useEffect(() => {
-    const timer = setTimeout(() => saveToStorage(data), 300);
+    const timer = setTimeout(() => saveToStorage(data), 200);
     return () => clearTimeout(timer);
   }, [data]);
 
-  // ========== AUTO-SYNC TO GOOGLE SHEETS (debounced 2s) ==========
+  // ========== STEP 3: AUTO-SYNC TO SHEETS (debounced 3s) ==========
   useEffect(() => {
-    if (isInitialMountRef.current) { isInitialMountRef.current = false; return; }
     const sheetUrl = data.settings?.sheetUrl;
-    if (!sheetUrl) return;
+    if (!sheetUrl) { hasAutoSyncedRef.current = false; return; }
+
+    // Skip very first render to avoid sending default empty data over cloud data
+    if (!hasAutoSyncedRef.current) {
+      // Check if data has meaningful content before auto-syncing
+      const hasContent = data.members.length > 0 ||
+        data.committee.some(c => c.name) ||
+        data.collections.length > 0;
+      if (!hasContent) {
+        hasAutoSyncedRef.current = true;
+        return;
+      }
+      hasAutoSyncedRef.current = true;
+    }
+
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
     setSyncStatus('syncing');
+    setSyncError('');
+
     syncTimeoutRef.current = setTimeout(async () => {
       try {
         console.log('[SVAKS] Auto-syncing to Sheets...');
-        await postDataToSheets(sheetUrl, data);
-        console.log('[SVAKS] Auto-synced OK');
+        await fetch(sheetUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(data)
+        });
+        console.log('[SVAKS] ✅ Auto-synced');
         setSyncStatus('synced');
+        setSyncError('');
+        setSyncLastTime(new Date());
       } catch (e) {
-        console.error('[SVAKS] Auto-sync failed:', e);
+        console.error('[SVAKS] ❌ Auto-sync error:', e.message);
         setSyncStatus('error');
+        setSyncError(e.message);
       }
-    }, 2000);
+    }, 3000);
 
     return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); };
-  }, [data]);
+  }, [data]); // Re-runs every time data changes
 
-  // ===== MANUAL SYNC =====
+  // ===== MANUAL: FORCE PUSH to Sheets =====
   const syncToGoogleSheet = useCallback(async () => {
     const sheetUrl = data.settings?.sheetUrl;
-    if (!sheetUrl) { alert('Pehle Settings mein Google Sheets URL setup karo!'); return; }
+    if (!sheetUrl) {
+      alert('⚠️ Google Sheets URL nahi mila!\n\nSettings mein jaake Google Apps Script Web App URL paste karo.');
+      return;
+    }
     setSyncStatus('syncing');
+    setSyncError('');
     try {
-      await postDataToSheets(sheetUrl, data);
+      console.log('[SVAKS] Manual sync to:', sheetUrl);
+      await fetch(sheetUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(data)
+      });
       setSyncStatus('synced');
-      alert('Data Google Sheets pe sync ho gaya!');
+      setSyncLastTime(new Date());
+      alert('✅ Data Google Sheets pe bhej diya gaya!\n\nSheets open karke check karo.');
     } catch (e) {
-      console.error('Sync error:', e);
       setSyncStatus('error');
-      alert('Sync error!');
+      setSyncError(e.message);
+      alert('❌ Sync error: ' + e.message);
     }
   }, [data]);
 
-  // ===== MANUAL LOAD =====
+  // ===== MANUAL: FORCE PULL from Sheets =====
   const loadFromGoogleSheet = useCallback(async () => {
     const sheetUrl = data.settings?.sheetUrl;
-    if (!sheetUrl) { alert('Pehle Settings mein Google Sheets URL setup karo!'); return; }
+    if (!sheetUrl) {
+      alert('⚠️ Google Sheets URL nahi mila!');
+      return;
+    }
+    if (!confirm('Google Sheets se data load karna hai?\n\nYe local data ko Sheets ke data se replace kar dega.')) return;
+
+    setSyncStatus('loading');
     try {
-      const sheetData = await getDataFromSheets(sheetUrl);
-      if (sheetData && sheetData.members) {
-        setData({
-          members: sheetData.members || [],
-          collections: sheetData.collections || [],
-          expenditure: sheetData.expenditure || [],
-          committee: sheetData.committee || defaultCommittee.map(c => ({ ...c })),
-          notifications: sheetData.notifications || defaultNotifications.map(n => ({ ...n })),
-          settings: { ...defaultSettings, ...(sheetData.settings || {}), sheetUrl }
-        });
-        setSyncStatus('synced');
-        alert('Google Sheets se data load ho gaya!');
-      } else { alert('Sheets pe koi data nahi mila.'); }
+      const loadUrl = sheetUrl.includes('/load') ? sheetUrl : sheetUrl.replace(/\/exec.*/, '/exec') + '/load';
+      const response = await fetch(loadUrl);
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+
+      const sheetData = await response.json();
+      setData({
+        members: sheetData.members || [],
+        collections: sheetData.collections || [],
+        expenditure: sheetData.expenditure || [],
+        committee: sheetData.committee || defaultCommittee.map(c => ({ ...c })),
+        notifications: sheetData.notifications || defaultNotifications.map(n => ({ ...n })),
+        settings: { ...defaultSettings, ...(sheetData.settings || {}), sheetUrl }
+      });
+      setSyncStatus('synced');
+      setSyncLastTime(new Date());
+      alert('✅ Google Sheets se data load ho gaya!');
     } catch (e) {
-      console.error('Load error:', e);
-      alert('Load error!');
       setSyncStatus('error');
+      setSyncError(e.message);
+      alert('❌ Load error: ' + e.message);
     }
   }, [data.settings]);
 
+  // ===== CRUD HELPERS =====
   const update = useCallback((key, value) => {
     setData(prev => ({ ...prev, [key]: value }));
   }, []);
 
   const updateSetting = useCallback((key, value) => {
-    setData(prev => ({ ...prev, settings: { ...prev.settings, [key]: value } }));
+    setData(prev => ({
+      ...prev,
+      settings: { ...prev.settings, [key]: value }
+    }));
   }, []);
 
   const updateCommittee = useCallback((id, fields) => {
@@ -367,7 +429,8 @@ export function DataProvider({ children }) {
     committee: data.committee, updateCommittee,
     notifications: data.notifications, addNotification, updateNotification, deleteNotification,
     settings: data.settings, updateSetting,
-    syncStatus, syncToGoogleSheet, loadFromGoogleSheet,
+    syncStatus, syncError, syncLastTime,
+    syncToGoogleSheet, loadFromGoogleSheet,
     exportJSON, importJSON
   };
 

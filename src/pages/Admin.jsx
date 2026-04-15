@@ -955,7 +955,7 @@ function CommitteeSection() {
 
 // ===== SETTINGS SECTION =====
 function SettingsSection() {
-  const { settings, updateSetting, syncToGoogleSheet, loadFromGoogleSheet, exportJSON, importJSON } = useData();
+  const { settings, updateSetting, syncToGoogleSheet, loadFromGoogleSheet, exportJSON, importJSON, syncStatus, syncError, syncLastTime } = useData();
   const { addToast: toast } = useToast();
   const [form, setForm] = useState({
     appName: settings.appName,
@@ -1158,12 +1158,29 @@ function doGet(e) {
           />
           <div className="settings-actions">
             <button className="btn-primary" onClick={syncToGoogleSheet}>
-              Send Data to Sheets
+              📤 Send Data to Sheets
             </button>
             <button className="btn-secondary" onClick={loadFromGoogleSheet} style={{ color: 'var(--gold)', borderColor: 'var(--gold)' }}>
-              Load from Sheets
+              📥 Load from Sheets
             </button>
           </div>
+          {/* Sync Status Display */}
+          {settings?.sheetUrl && (
+            <div style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '10px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.12)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.12)' : syncStatus === 'error' || syncStatus === 'loading' ? 'rgba(225,112,85,0.12)' : 'rgba(255,255,255,0.05)', border: `1px solid ${syncStatus === 'syncing' ? 'rgba(253,203,110,0.3)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.3)' : 'rgba(225,112,85,0.3)'}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '600', color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' || syncStatus === 'loading' ? '#E17055' : '#888' }}>
+                <span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : syncStatus === 'loading' ? '⏳' : '☁️'}</span>
+                <span>
+                  {syncStatus === 'syncing' ? 'Syncing to cloud...' :
+                    syncStatus === 'synced' ? 'Cloud synced!' :
+                      syncStatus === 'error' ? 'Sync failed!' :
+                        syncStatus === 'loading' ? 'Loading from cloud...' :
+                          'Cloud connected'}
+                </span>
+              </div>
+              {syncError && <div style={{ marginTop: '6px', fontSize: '12px', color: '#E17055' }}>Error: {syncError}</div>}
+              {syncLastTime && <div style={{ marginTop: '4px', fontSize: '11px', color: '#999' }}>Last sync: {syncLastTime.toLocaleTimeString()}</div>}
+            </div>
+          )}
         </div>
       </div>
 
