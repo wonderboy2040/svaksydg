@@ -1479,11 +1479,18 @@
     font-size: 36px;
   }
 
+  .committee-grid {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+    padding: 0 8px;
+  }
+
   .committee-card {
     padding: 24px 16px;
   }
 
-  .committee-avatar {
+  .committee-avatar,
+  .committee-avatar-initials {
     width: 80px;
     height: 80px;
     font-size: 28px;
@@ -1491,6 +1498,20 @@
 
   .committee-name {
     font-size: 18px;
+  }
+
+  .committee-designation {
+    font-size: 13px;
+    padding: 6px 16px;
+  }
+
+  .committee-phone,
+  .committee-address {
+    font-size: 14px;
+  }
+
+  .committee-phone a {
+    font-size: 14px;
   }
 
   .dharmik-card {

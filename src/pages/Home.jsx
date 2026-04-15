@@ -112,14 +112,14 @@ function Home() {
           <div className="corner-ornament bottom-left"></div>
           <div className="corner-ornament bottom-right"></div>
         </div>
-          <div className="hero-content">
+        <div className="hero-content">
           <div className="om-premium">
             <span className="om-main">ॐ</span>
           </div>
           <h1 className="hero-english-title">Soma Vamshi Aarya Kshthriya Samaj</h1>
           <p className="hero-subtitle">YADGIR • KARNATAKA</p>
           <p className="hero-description">
-            "Our society is built on the foundation of unity, dharma and brotherhood. 
+            "Our society is built on the foundation of unity, dharma and brotherhood.
             Through collective organization, cooperation and welfare, we build a strong community."
           </p>
           <div className="hero-actions">
@@ -185,8 +185,8 @@ function Home() {
                 </div>
                 <div className="notification-dots">
                   {activeNotifs.map((_, i) => (
-                    <span 
-                      key={i} 
+                    <span
+                      key={i}
                       className={`notif-dot ${i === activeNotification ? 'active' : ''}`}
                       onClick={() => setActiveNotification(i)}
                     ></span>
@@ -258,21 +258,32 @@ function Home() {
         <div className="committee-grid">
           {committee.map((member, idx) => {
             const initials = getInitials(member.name || member.position);
+            const hasName = member.name && member.name.trim() !== '';
+            const hasPhoto = member.photo && member.photo.trim() !== '';
             return (
               <div className="committee-card" key={member.id}>
-                {member.photo ? (
+                {hasPhoto ? (
                   <img
                     src={getDirectImageUrl(member.photo)}
                     alt={member.name || member.position}
                     className="committee-avatar"
                     onError={(e) => {
-                      e.target.src = PLACEHOLDER_IMAGE;
+                      console.warn(`[Committee] Failed to load image for ${member.name || member.position}:`, member.photo);
+                      e.target.style.display = 'none';
+                      const placeholder = e.target.parentElement.querySelector('.committee-avatar-initials');
+                      if (placeholder) placeholder.style.display = 'flex';
                     }}
                   />
-                ) : (
-                  <div className="committee-avatar-initials">{initials}</div>
+                ) : null}
+                <div
+                  className="committee-avatar-initials"
+                  style={{ display: hasPhoto ? 'none' : 'flex' }}
+                >
+                  {initials}
+                </div>
+                {hasName && (
+                  <div className="committee-name">{member.name}</div>
                 )}
-                <div className="committee-name">{member.name || member.position}</div>
                 <div className="committee-designation">{member.position}</div>
                 <div className="committee-phone">
                   {member.phone ? (
