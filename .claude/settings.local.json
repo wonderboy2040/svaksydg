@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(command -v node)",
+      "Bash(cd:*)",
+      "Bash(npm install:*)",
+      "Bash(npx vite:*)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \"5173\")",
+      "Bash(taskkill //PID 7836 //F)",
+      "Bash(npm run:*)",
+      "Bash(curl -s http://localhost:5177)",
+      "Bash(curl -s http://localhost:5177/src/pages/Admin.jsx)",
+      "Bash(curl -s http://localhost:5177/src/styles/Admin.css)"
+    ]
+  }
+}
