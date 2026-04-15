@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 
 const DataContext = createContext(null);
 
@@ -83,15 +83,12 @@ function loadFromStorage() {
     if (raw) {
       const parsed = JSON.parse(raw);
       const settings = { ...defaultSettings, ...(parsed.settings || {}) };
-
-      // PIN is stored in plain text now
-
       return {
         members: parsed.members || [],
         collections: parsed.collections || [],
         expenditure: parsed.expenditure || [],
-        committee: parsed.committee || defaultCommittee,
-        notifications: parsed.notifications || defaultNotifications,
+        committee: parsed.committee || defaultCommittee.map(c => ({ ...c })),
+        notifications: parsed.notifications || defaultNotifications.map(n => ({ ...n })),
         settings: settings
       };
     }
@@ -116,28 +113,141 @@ function saveToStorage(data) {
   }
 }
 
+/** Send data to Google Sheets via Apps Script (fire-and-forget, no-cors) */
+async function postDataToSheets(sheetUrl, data) {
+  await fetch(sheetUrl, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(data)
+  });
+}
+
+/** Load data from Google Sheets via Apps Script GET endpoint */
+async function getDataFromSheets(sheetUrl) {
+  const loadUrl = sheetUrl.includes('/load') ? sheetUrl : sheetUrl.replace(/\/exec.*/, '/exec') + '/load';
+  const response = await fetch(loadUrl);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
 export function DataProvider({ children }) {
   const [data, setData] = useState(loadFromStorage);
+  const [syncStatus, setSyncStatus] = useState('idle'); // idle | syncing | synced | error
+  const [sheetsLoaded, setSheetsLoaded] = useState(false);
+  const syncTimeoutRef = useRef(null);
+  const isInitialMountRef = useRef(true);
 
-  // Persist on every change with a debounce to prevent UI lag
+  // ========== AUTO-LOAD FROM GOOGLE SHEETS ON START ==========
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      saveToStorage(data);
-    }, 500); // Save after 500ms of inactivity
-    return () => clearTimeout(timeoutId);
+    if (sheetsLoaded) return;
+    const sheetUrl = data.settings?.sheetUrl;
+    if (!sheetUrl) { setSheetsLoaded(true); return; }
+
+    const tryLoadFromSheets = async () => {
+      try {
+        console.log('[SVAKS] Loading from Google Sheets...');
+        const sheetData = await getDataFromSheets(sheetUrl);
+        if (sheetData && (sheetData.members?.length > 0 || sheetData.committee?.some(c => c.name))) {
+          console.log('[SVAKS] Loaded from Google Sheets');
+          setData({
+            members: sheetData.members || [],
+            collections: sheetData.collections || [],
+            expenditure: sheetData.expenditure || [],
+            committee: sheetData.committee || defaultCommittee.map(c => ({ ...c })),
+            notifications: sheetData.notifications || defaultNotifications.map(n => ({ ...n })),
+            settings: { ...defaultSettings, ...(sheetData.settings || {}), sheetUrl }
+          });
+          setSyncStatus('synced');
+        } else {
+          console.log('[SVAKS] No data in Sheets, using localStorage');
+        }
+      } catch (e) {
+        console.warn('[SVAKS] Sheets load failed, using localStorage:', e.message);
+      }
+      setSheetsLoaded(true);
+    };
+
+    const timer = setTimeout(tryLoadFromSheets, 300);
+    return () => clearTimeout(timer);
+  }, [data.settings?.sheetUrl, sheetsLoaded]);
+
+  // ========== AUTO-SAVE TO LOCALSTORAGE ==========
+  useEffect(() => {
+    const timer = setTimeout(() => saveToStorage(data), 300);
+    return () => clearTimeout(timer);
   }, [data]);
+
+  // ========== AUTO-SYNC TO GOOGLE SHEETS (debounced 2s) ==========
+  useEffect(() => {
+    if (isInitialMountRef.current) { isInitialMountRef.current = false; return; }
+    const sheetUrl = data.settings?.sheetUrl;
+    if (!sheetUrl) return;
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+
+    setSyncStatus('syncing');
+    syncTimeoutRef.current = setTimeout(async () => {
+      try {
+        console.log('[SVAKS] Auto-syncing to Sheets...');
+        await postDataToSheets(sheetUrl, data);
+        console.log('[SVAKS] Auto-synced OK');
+        setSyncStatus('synced');
+      } catch (e) {
+        console.error('[SVAKS] Auto-sync failed:', e);
+        setSyncStatus('error');
+      }
+    }, 2000);
+
+    return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); };
+  }, [data]);
+
+  // ===== MANUAL SYNC =====
+  const syncToGoogleSheet = useCallback(async () => {
+    const sheetUrl = data.settings?.sheetUrl;
+    if (!sheetUrl) { alert('Pehle Settings mein Google Sheets URL setup karo!'); return; }
+    setSyncStatus('syncing');
+    try {
+      await postDataToSheets(sheetUrl, data);
+      setSyncStatus('synced');
+      alert('Data Google Sheets pe sync ho gaya!');
+    } catch (e) {
+      console.error('Sync error:', e);
+      setSyncStatus('error');
+      alert('Sync error!');
+    }
+  }, [data]);
+
+  // ===== MANUAL LOAD =====
+  const loadFromGoogleSheet = useCallback(async () => {
+    const sheetUrl = data.settings?.sheetUrl;
+    if (!sheetUrl) { alert('Pehle Settings mein Google Sheets URL setup karo!'); return; }
+    try {
+      const sheetData = await getDataFromSheets(sheetUrl);
+      if (sheetData && sheetData.members) {
+        setData({
+          members: sheetData.members || [],
+          collections: sheetData.collections || [],
+          expenditure: sheetData.expenditure || [],
+          committee: sheetData.committee || defaultCommittee.map(c => ({ ...c })),
+          notifications: sheetData.notifications || defaultNotifications.map(n => ({ ...n })),
+          settings: { ...defaultSettings, ...(sheetData.settings || {}), sheetUrl }
+        });
+        setSyncStatus('synced');
+        alert('Google Sheets se data load ho gaya!');
+      } else { alert('Sheets pe koi data nahi mila.'); }
+    } catch (e) {
+      console.error('Load error:', e);
+      alert('Load error!');
+      setSyncStatus('error');
+    }
+  }, [data.settings]);
 
   const update = useCallback((key, value) => {
     setData(prev => ({ ...prev, [key]: value }));
   }, []);
 
   const updateSetting = useCallback((key, value) => {
-    setData(prev => {
-      return {
-        ...prev,
-        settings: { ...prev.settings, [key]: value }
-      };
-    });
+    setData(prev => ({ ...prev, settings: { ...prev.settings, [key]: value } }));
   }, []);
 
   const updateCommittee = useCallback((id, fields) => {
@@ -147,11 +257,10 @@ export function DataProvider({ children }) {
     }));
   }, []);
 
-  // ===== MEMBERS CRUD =====
   const addMember = useCallback((member) => {
     setData(prev => {
-      const sanitized = validateAndSanitizeMember({ ...member, monthlyFee: member.monthlyFee || prev.settings.monthlyFee });
-      return { ...prev, members: [...prev.members, sanitized] };
+      const s = validateAndSanitizeMember({ ...member, monthlyFee: member.monthlyFee || prev.settings.monthlyFee });
+      return { ...prev, members: [...prev.members, s] };
     });
   }, []);
 
@@ -163,17 +272,13 @@ export function DataProvider({ children }) {
   }, []);
 
   const deleteMember = useCallback((id) => {
-    setData(prev => ({
-      ...prev,
-      members: prev.members.filter(m => m.id !== id)
-    }));
+    setData(prev => ({ ...prev, members: prev.members.filter(m => m.id !== id) }));
   }, []);
 
-  // ===== COLLECTIONS CRUD =====
   const addCollection = useCallback((collection) => {
     setData(prev => {
-      const sanitized = validateAndSanitizeCollection(collection);
-      return { ...prev, collections: [...prev.collections, sanitized] };
+      const s = validateAndSanitizeCollection(collection);
+      return { ...prev, collections: [...prev.collections, s] };
     });
   }, []);
 
@@ -185,17 +290,13 @@ export function DataProvider({ children }) {
   }, []);
 
   const deleteCollection = useCallback((id) => {
-    setData(prev => ({
-      ...prev,
-      collections: prev.collections.filter(c => c.id !== id)
-    }));
+    setData(prev => ({ ...prev, collections: prev.collections.filter(c => c.id !== id) }));
   }, []);
 
-  // ===== EXPENDITURE CRUD =====
   const addExpenditure = useCallback((expenditure) => {
     setData(prev => {
-      const sanitized = validateAndSanitizeExpenditure(expenditure);
-      return { ...prev, expenditure: [...prev.expenditure, sanitized] };
+      const s = validateAndSanitizeExpenditure(expenditure);
+      return { ...prev, expenditure: [...prev.expenditure, s] };
     });
   }, []);
 
@@ -207,17 +308,13 @@ export function DataProvider({ children }) {
   }, []);
 
   const deleteExpenditure = useCallback((id) => {
-    setData(prev => ({
-      ...prev,
-      expenditure: prev.expenditure.filter(e => e.id !== id)
-    }));
+    setData(prev => ({ ...prev, expenditure: prev.expenditure.filter(e => e.id !== id) }));
   }, []);
 
-  // ===== NOTIFICATIONS CRUD =====
   const addNotification = useCallback((notification) => {
     setData(prev => {
-      const sanitized = validateAndSanitizeNotification(notification);
-      return { ...prev, notifications: [sanitized, ...prev.notifications] };
+      const s = validateAndSanitizeNotification(notification);
+      return { ...prev, notifications: [s, ...prev.notifications] };
     });
   }, []);
 
@@ -229,63 +326,8 @@ export function DataProvider({ children }) {
   }, []);
 
   const deleteNotification = useCallback((id) => {
-    setData(prev => ({
-      ...prev,
-      notifications: prev.notifications.filter(n => n.id !== id)
-    }));
+    setData(prev => ({ ...prev, notifications: prev.notifications.filter(n => n.id !== id) }));
   }, []);
-
-  // ===== GOOGLE SHEETS SYNC =====
-  const syncToGoogleSheet = useCallback(async () => {
-    const { sheetUrl } = data.settings;
-    if (!sheetUrl) {
-      alert('Pehle Settings mein Google Sheets URL setup karo!');
-      return;
-    }
-    try {
-      const response = await fetch(sheetUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(data)
-      });
-      alert('Data Google Sheets pe sync ho gaya!');
-    } catch (e) {
-      console.error('Sync error:', e);
-      alert('Sync mein error aaya. Console check karo.');
-    }
-  }, [data, data.settings]);
-
-  const loadFromGoogleSheet = useCallback(async () => {
-    const { sheetUrl } = data.settings;
-    if (!sheetUrl) {
-      alert('Pehle Settings mein Google Sheets URL setup karo!');
-      return;
-    }
-    try {
-      const scriptUrl = sheetUrl.replace('exec', 'exec') + '/load';
-      const response = await fetch(scriptUrl);
-      if (response.ok) {
-        const sheetData = await response.json();
-        if (sheetData.members) {
-          setData({
-            members: sheetData.members || [],
-            collections: sheetData.collections || [],
-            expenditure: sheetData.expenditure || [],
-            committee: sheetData.committee || defaultCommittee.map(c => ({ ...c })),
-            notifications: sheetData.notifications || defaultNotifications.map(n => ({ ...n })),
-            settings: { ...defaultSettings, ...(sheetData.settings || {}) }
-          });
-          alert('Google Sheets se data load ho gaya!');
-        } else {
-          alert('Sheets pe koi data nahi mila.');
-        }
-      }
-    } catch (e) {
-      console.error('Load error:', e);
-      alert('Load karne mein error. Direct sheet se copy-paste karo.');
-    }
-  }, [data.settings]);
 
   // ===== BACKUP / RESTORE =====
   const exportJSON = useCallback(() => {
@@ -302,65 +344,34 @@ export function DataProvider({ children }) {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const imported = JSON.parse(e.target.result);
+        const imp = JSON.parse(e.target.result);
         setData({
-          members: imported.members || [],
-          collections: imported.collections || [],
-          expenditure: imported.expenditure || [],
-          committee: imported.committee || defaultCommittee,
-          settings: { ...defaultSettings, ...(imported.settings || {}) }
+          members: imp.members || [],
+          collections: imp.collections || [],
+          expenditure: imp.expenditure || [],
+          committee: imp.committee || defaultCommittee.map(c => ({ ...c })),
+          notifications: imp.notifications || defaultNotifications.map(n => ({ ...n })),
+          settings: { ...defaultSettings, ...(imp.settings || {}) }
         });
         alert('Data import successful!');
-      } catch (err) {
-        alert('Invalid JSON file!');
-      }
+      } catch { alert('Invalid JSON file!'); }
     };
     reader.readAsText(file);
   }, []);
 
   const value = {
-    data,
-    setData,
-    update,
-    // Members
-    members: data.members,
-    addMember,
-    updateMember,
-    deleteMember,
-    // Collections
-    collections: data.collections,
-    addCollection,
-    updateCollection,
-    deleteCollection,
-    // Expenditure
-    expenditure: data.expenditure,
-    addExpenditure,
-    updateExpenditure,
-    deleteExpenditure,
-    // Committee
-    committee: data.committee,
-    updateCommittee,
-    // Notifications
-    notifications: data.notifications,
-    addNotification,
-    updateNotification,
-    deleteNotification,
-    // Settings
-    settings: data.settings,
-    updateSetting,
-    // Sync
-    syncToGoogleSheet,
-    loadFromGoogleSheet,
-    // Backup
-    exportJSON,
-    importJSON
+    data, setData, update,
+    members: data.members, addMember, updateMember, deleteMember,
+    collections: data.collections, addCollection, updateCollection, deleteCollection,
+    expenditure: data.expenditure, addExpenditure, updateExpenditure, deleteExpenditure,
+    committee: data.committee, updateCommittee,
+    notifications: data.notifications, addNotification, updateNotification, deleteNotification,
+    settings: data.settings, updateSetting,
+    syncStatus, syncToGoogleSheet, loadFromGoogleSheet,
+    exportJSON, importJSON
   };
 
-  return (
-    <DataContext.Provider value={value}>
-      {children}
-    </DataContext.Provider>
-  );
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
 export function useData() {

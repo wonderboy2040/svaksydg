@@ -893,59 +893,60 @@ function CommitteeSection() {
           {committee.map(member => {
             const imgError = false; // Simplified - removed useState from map
             return (
-            <div className="committee-edit-card" key={member.id}>
-              <div className="photo-section">
-                {member.photo ? (
-                  <img
-                    src={getDirectImageUrl(member.photo)}
-                    alt={member.name}
-                    className="committee-photo"
-                    onError={(e) => {
-                      e.target.src = PLACEHOLDER_IMAGE;
-                    }}
-                  />
-                ) : null}
-                <div className="avatar-placeholder" style={member.photo && !imgError ? { display: 'none' } : {}}>
-                  {getInitials(member.name || member.position)}
+              <div className="committee-edit-card" key={member.id}>
+                <div className="photo-section">
+                  {member.photo ? (
+                    <img
+                      src={getDirectImageUrl(member.photo)}
+                      alt={member.name}
+                      className="committee-photo"
+                      onError={(e) => {
+                        e.target.src = PLACEHOLDER_IMAGE;
+                      }}
+                    />
+                  ) : null}
+                  <div className="avatar-placeholder" style={member.photo && !imgError ? { display: 'none' } : {}}>
+                    {getInitials(member.name || member.position)}
+                  </div>
+                </div>
+                <div className="form-fields">
+                  <span className="position-badge">{member.position}</span>
+                  <label>
+                    Name
+                    <input
+                      value={member.name}
+                      onChange={e => handleFieldChange(member.id, 'name', e.target.value)}
+                      placeholder="Enter name"
+                    />
+                  </label>
+                  <label>
+                    Phone
+                    <input
+                      value={member.phone}
+                      onChange={e => handleFieldChange(member.id, 'phone', e.target.value)}
+                      placeholder="Phone number"
+                    />
+                  </label>
+                  <label>
+                    Photo URL (Google Photos/Drive)
+                    <input
+                      value={member.photo || ''}
+                      onChange={e => handlePhotoChange(member.id, e.target.value)}
+                      placeholder="https://photos.google.com/... or https://drive.google.com/..."
+                    />
+                  </label>
+                  <label>
+                    Address
+                    <input
+                      value={member.address}
+                      onChange={e => handleFieldChange(member.id, 'address', e.target.value)}
+                      placeholder="Address"
+                    />
+                  </label>
                 </div>
               </div>
-              <div className="form-fields">
-                <span className="position-badge">{member.position}</span>
-                <label>
-                  Name
-                  <input
-                    value={member.name}
-                    onChange={e => handleFieldChange(member.id, 'name', e.target.value)}
-                    placeholder="Enter name"
-                  />
-                </label>
-                <label>
-                  Phone
-                  <input
-                    value={member.phone}
-                    onChange={e => handleFieldChange(member.id, 'phone', e.target.value)}
-                    placeholder="Phone number"
-                  />
-                </label>
-                <label>
-                  Photo URL (Google Photos/Drive)
-                  <input
-                    value={member.photo || ''}
-                    onChange={e => handlePhotoChange(member.id, e.target.value)}
-                    placeholder="https://photos.google.com/... or https://drive.google.com/..."
-                  />
-                </label>
-                <label>
-                  Address
-                  <input
-                    value={member.address}
-                    onChange={e => handleFieldChange(member.id, 'address', e.target.value)}
-                    placeholder="Address"
-                  />
-                </label>
-              </div>
-            </div>
-            );})}
+            );
+          })}
         </div>
       </div>
     </div>
@@ -1231,7 +1232,7 @@ function NotificationsSection() {
           <h3>Notice Board ({activeNotifs.length})</h3>
           <button className="btn-primary" onClick={() => setShowModal(true)}>+ Add Notice</button>
         </div>
-        
+
         {activeNotifs.length === 0 ? (
           <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>No notices yet. Add your first notice!</p>
         ) : (
@@ -1293,6 +1294,7 @@ function NotificationsSection() {
 // ===== MAIN ADMIN COMPONENT =====
 function Admin() {
   const navigate = useNavigate();
+  const { syncStatus, settings } = useData();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -1358,6 +1360,15 @@ function Admin() {
           ))}
         </nav>
         <div className="admin-sidebar-footer">
+          {/* Cloud Sync Status Indicator */}
+          {settings?.sheetUrl && (
+            <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)' }}>
+              <span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : '☁️'}</span>
+              <span style={{ color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' ? '#E17055' : 'rgba(255,255,255,0.5)' }}>
+                {syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Cloud synced' : syncStatus === 'error' ? 'Sync failed' : 'Cloud connected'}
+              </span>
+            </div>
+          )}
           <button onClick={handleLogout}>
             <span>🔒</span> Logout →
           </button>
