@@ -36,6 +36,7 @@ function loadFromStorage() {
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
+        _syncVersion: parsed._syncVersion || 0,
         members: parsed.members || [],
         collections: parsed.collections || [],
         expenditure: parsed.expenditure || [],
@@ -48,6 +49,7 @@ function loadFromStorage() {
     console.error('[SVAKS] localStorage error:', e);
   }
   return {
+    _syncVersion: 0,
     members: [],
     collections: [],
     expenditure: [],
@@ -59,7 +61,15 @@ function loadFromStorage() {
 
 function saveToStorage(data) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      _syncVersion: data._syncVersion || 0,
+      members: data.members,
+      collections: data.collections,
+      expenditure: data.expenditure,
+      committee: data.committee,
+      notifications: data.notifications,
+      settings: data.settings
+    }));
   } catch (e) {
     console.error('[SVAKS] save error:', e);
   }
@@ -165,11 +175,14 @@ export function DataProvider({ children }) {
     isSyncingRef.current = true;
 
     try {
+      const syncVersion = Date.now();
       const dataWithMeta = {
         ...dataToPush,
-        _syncVersion: Date.now(),
+        _syncVersion: syncVersion,
         _lastSync: new Date().toISOString()
       };
+
+      console.log('[SVAKS] Pushing to cloud, version:', syncVersion);
 
       await fetch(sheetUrl, {
         method: 'POST',
@@ -177,6 +190,9 @@ export function DataProvider({ children }) {
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(dataWithMeta)
       });
+
+      // Update local version after successful push
+      setData(prev => ({ ...prev, _syncVersion: syncVersion }));
 
       setSyncStatus('synced');
       setSyncLastTime(new Date());
@@ -207,11 +223,16 @@ export function DataProvider({ children }) {
       return;
     }
 
-    const localVersion = data.settings?._syncVersion || 0;
-    const cloudVersion = cloud._syncVersion || 0;
+    // Check _syncVersion at root level, not in settings
+    const localVersion = data._syncVersion || 0;
+    const cloudVersion = Number(cloud._syncVersion) || 0;
+
+    console.log('[SVAKS] Comparing versions - Local:', localVersion, 'Cloud:', cloudVersion);
 
     if (cloudVersion > localVersion || !initialLoadDone) {
+      console.log('[SVAKS] Updating from cloud...');
       setData({
+        _syncVersion: cloudVersion,
         members: Array.isArray(cloud.members) ? cloud.members : [],
         collections: Array.isArray(cloud.collections) ? cloud.collections : [],
         expenditure: Array.isArray(cloud.expenditure) ? cloud.expenditure : [],
@@ -228,7 +249,7 @@ export function DataProvider({ children }) {
 
     setSyncStatus('synced');
     setSyncLastTime(new Date());
-  }, [fetchCloudData, data.settings?._syncVersion, initialLoadDone, sheetUrl]);
+  }, [fetchCloudData, data._syncVersion, initialLoadDone, sheetUrl]);
 
   useEffect(() => {
     if (sheetUrl && !initialLoadDone) {
@@ -261,13 +282,14 @@ export function DataProvider({ children }) {
       const cloud = await fetchCloudData(false);
       if (!cloud) return;
 
-      const cloudVersion = cloud._syncVersion || 0;
-      const localVersion = data.settings?._syncVersion || 0;
+      const cloudVersion = Number(cloud._syncVersion) || 0;
+      const localVersion = data._syncVersion || 0;
 
       if (cloudVersion > localVersion) {
         console.log('[SVAKS] Poll: New data detected, updating...');
 
         setData({
+          _syncVersion: cloudVersion,
           members: Array.isArray(cloud.members) ? cloud.members : [],
           collections: Array.isArray(cloud.collections) ? cloud.collections : [],
           expenditure: Array.isArray(cloud.expenditure) ? cloud.expenditure : [],
