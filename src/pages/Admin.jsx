@@ -1006,6 +1006,8 @@ function SettingsSection() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheetNames = ['Members', 'Collections', 'Expenditure', 'Committee', 'Settings'];
   var dataKeys = ['members', 'collections', 'expenditure', 'committee', 'settings'];
+
+  // Save all data to respective sheets
   for (var i = 0; i < sheetNames.length; i++) {
     var sheet = ss.getSheetByName(sheetNames[i]);
     if (!sheet) sheet = ss.insertSheet(sheetNames[i]);
@@ -1015,10 +1017,20 @@ function SettingsSection() {
       var headers = Object.keys(rows[0]);
       sheet.appendRow(headers);
       rows.forEach(function(item) {
-        sheet.appendRow(headers.map(h => item[h] || ''));
+        sheet.appendRow(headers.map(h => item[h] !== undefined ? item[h] : ''));
       });
     }
   }
+
+  // Add timestamp for multi-device sync detection
+  var settingsSheet = ss.getSheetByName('Settings');
+  if (!settingsSheet) settingsSheet = ss.insertSheet('Settings');
+  var lastRow = settingsSheet.getLastRow();
+  if (lastRow > 1) {
+    settingsSheet.getRange(lastRow, 1, 1, 2).clearContent();
+  }
+  settingsSheet.appendRow(['lastUpdated', new Date().toISOString()]);
+
   return ContentService.createTextOutput('OK');
 }
 
@@ -1028,6 +1040,8 @@ function doGet(e) {
     var data = {};
     var sheetNames = ['Members', 'Collections', 'Expenditure', 'Committee', 'Settings'];
     var dataKeys = ['members', 'collections', 'expenditure', 'committee', 'settings'];
+
+    // Load all data from sheets
     for (var i = 0; i < sheetNames.length; i++) {
       var sheet = ss.getSheetByName(sheetNames[i]);
       if (sheet) {
@@ -1164,21 +1178,45 @@ function doGet(e) {
               📥 Load from Sheets
             </button>
           </div>
-          {/* Sync Status Display */}
+
+          {/* Multi-Device Sync Info */}
           {settings?.sheetUrl && (
-            <div style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '10px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.12)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.12)' : syncStatus === 'error' || syncStatus === 'loading' ? 'rgba(225,112,85,0.12)' : 'rgba(255,255,255,0.05)', border: `1px solid ${syncStatus === 'syncing' ? 'rgba(253,203,110,0.3)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.3)' : 'rgba(225,112,85,0.3)'}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '600', color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' || syncStatus === 'loading' ? '#E17055' : '#888' }}>
-                <span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : syncStatus === 'loading' ? '⏳' : '☁️'}</span>
-                <span>
-                  {syncStatus === 'syncing' ? 'Syncing to cloud...' :
-                    syncStatus === 'synced' ? 'Cloud synced!' :
-                      syncStatus === 'error' ? 'Sync failed!' :
-                        syncStatus === 'loading' ? 'Loading from cloud...' :
-                          'Cloud connected'}
-                </span>
+            <div style={{ marginTop: '16px', padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(0,184,148,0.08), rgba(253,203,110,0.05))', border: '1px solid rgba(0,184,148,0.3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                <span style={{ fontSize: '20px' }}>☁️</span>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#00B894' }}>Multi-Device Auto-Sync Active</div>
+                  <div style={{ fontSize: '12px', color: '#888' }}>Data automatically syncs across all devices</div>
+                </div>
               </div>
-              {syncError && <div style={{ marginTop: '6px', fontSize: '12px', color: '#E17055' }}>Error: {syncError}</div>}
-              {syncLastTime && <div style={{ marginTop: '4px', fontSize: '11px', color: '#999' }}>Last sync: {syncLastTime.toLocaleTimeString()}</div>}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', fontSize: '12px' }}>
+                <div style={{ padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                  <div style={{ color: '#888' }}>🔄 Auto-poll</div>
+                  <div style={{ color: '#fff' }}>Every 30 seconds</div>
+                </div>
+                <div style={{ padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                  <div style={{ color: '#888' }}>👁️ Tab switch</div>
+                  <div style={{ color: '#fff' }}>Instant sync</div>
+                </div>
+                <div style={{ padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                  <div style={{ color: '#888' }}>📊 Last sync</div>
+                  <div style={{ color: '#fff' }}>{syncLastTime ? syncLastTime.toLocaleTimeString() : 'Never'}</div>
+                </div>
+              </div>
+              {/* Sync Status Display */}
+              <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '10px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' || syncStatus === 'loading' ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${syncStatus === 'syncing' ? 'rgba(253,203,110,0.4)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.4)' : syncStatus === 'error' || syncStatus === 'loading' ? 'rgba(225,112,85,0.4)' : 'rgba(255,255,255,0.1)'}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '600', color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' || syncStatus === 'loading' ? '#E17055' : '#aaa' }}>
+                  <span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : syncStatus === 'loading' ? '⏳' : '☁️'}</span>
+                  <span>
+                    {syncStatus === 'syncing' ? 'Syncing to cloud...' :
+                      syncStatus === 'synced' ? 'All devices in sync' :
+                        syncStatus === 'error' ? 'Sync failed!' :
+                          syncStatus === 'loading' ? 'Loading from cloud...' :
+                            'Cloud connected'}
+                  </span>
+                </div>
+                {syncError && <div style={{ marginTop: '6px', fontSize: '12px', color: '#E17055' }}>Error: {syncError}</div>}
+              </div>
             </div>
           )}
         </div>
@@ -1311,7 +1349,7 @@ function NotificationsSection() {
 // ===== MAIN ADMIN COMPONENT =====
 function Admin() {
   const navigate = useNavigate();
-  const { syncStatus, settings } = useData();
+  const { syncStatus, settings, loadFromGoogleSheet } = useData();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -1379,12 +1417,20 @@ function Admin() {
         <div className="admin-sidebar-footer">
           {/* Cloud Sync Status Indicator */}
           {settings?.sheetUrl && (
-            <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)' }}>
-              <span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : '☁️'}</span>
-              <span style={{ color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' ? '#E17055' : 'rgba(255,255,255,0.5)' }}>
-                {syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Cloud synced' : syncStatus === 'error' ? 'Sync failed' : 'Cloud connected'}
-              </span>
-            </div>
+            <>
+              <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)' }}>
+                <span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : '☁️'}</span>
+                <span style={{ color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' ? '#E17055' : 'rgba(255,255,255,0.5)' }}>
+                  {syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Cloud synced' : syncStatus === 'error' ? 'Sync failed' : 'Cloud connected'}
+                </span>
+              </div>
+              <button
+                onClick={loadFromGoogleSheet}
+                style={{ marginBottom: '12px', padding: '6px 10px', fontSize: '11px', background: 'rgba(0,184,148,0.2)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '6px', color: '#00B894', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              >
+                🔄 Refresh from Cloud
+              </button>
+            </>
           )}
           <button onClick={handleLogout}>
             <span>🔒</span> Logout →
