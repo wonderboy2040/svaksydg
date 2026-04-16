@@ -88,23 +88,8 @@ function SetupWizard() {
       }
 
       setLoading(true);
-      try {
-        const result = await testConnection(formData.sheetUrl);
-        if (!result.success) {
-          setLoading(false);
-          setError('Could not connect. Using URL anyway...');
-          setTimeout(() => {
-            updateSetting('sheetUrl', formData.sheetUrl);
-            setLoading(false);
-            setStep(2);
-          }, 1000);
-          return;
-        }
-      } catch (e) {
-        console.log('Connection test failed, saving URL anyway');
-      }
-      setLoading(false);
       updateSetting('sheetUrl', formData.sheetUrl);
+      setLoading(false);
       setStep(2);
     } 
     else if (step === 2) {
