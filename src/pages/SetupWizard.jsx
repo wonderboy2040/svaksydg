@@ -33,13 +33,13 @@ function SetupWizard() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const validateSheetUrl = async (url) => {
+  const validateSheetUrl = (url) => {
     if (!url) return { valid: false, error: 'URL required' };
     
-    const isSheets = url.includes('docs.google.com/spreadsheets') && (url.includes('/edit') || url.includes('/exec'));
-    const isAppsScript = url.includes('script.google.com/macros/exec');
+    const isAppsScript = url.includes('script.google.com/macros');
+    const isSheets = url.includes('docs.google.com/spreadsheets');
     
-    if (!isSheets && !isAppsScript) {
+    if (!isAppsScript && !isSheets) {
       return { valid: false, error: 'Enter Google Sheet OR AppsScript WebApp URL' };
     }
     return { valid: true };
@@ -77,25 +77,33 @@ function SetupWizard() {
     
     if (step === 1) {
       if (!formData.sheetUrl.trim()) {
-        setError('Google Sheet URL required');
+        setError('URL required');
         return;
       }
       
-      const validation = await validateSheetUrl(formData.sheetUrl);
+      const validation = validateSheetUrl(formData.sheetUrl);
       if (!validation.valid) {
         setError(validation.error);
         return;
       }
 
       setLoading(true);
-      const result = await testConnection(formData.sheetUrl);
-      setLoading(false);
-      
-      if (!result.success) {
-        setError('Could not connect to Sheet. Check URL permissions.');
-        return;
+      try {
+        const result = await testConnection(formData.sheetUrl);
+        if (!result.success) {
+          setLoading(false);
+          setError('Could not connect. Using URL anyway...');
+          setTimeout(() => {
+            updateSetting('sheetUrl', formData.sheetUrl);
+            setLoading(false);
+            setStep(2);
+          }, 1000);
+          return;
+        }
+      } catch (e) {
+        console.log('Connection test failed, saving URL anyway');
       }
-
+      setLoading(false);
       updateSetting('sheetUrl', formData.sheetUrl);
       setStep(2);
     } 
