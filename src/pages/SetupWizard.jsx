@@ -2,14 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../DataContext';
 
-const STORAGE_KEY = 'svaks_setup_complete';
+const SETTINGS_KEY = 'svaks_settings';
 
 function SetupWizard() {
   const navigate = useNavigate();
-  const { settings } = useData();
   
   const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
   const [formData, setFormData] = useState({
@@ -18,12 +16,19 @@ function SetupWizard() {
     confirmPin: ''
   });
 
+  const getSettings = () => {
+    try {
+      return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+    } catch { return {}; }
+  };
+
   useEffect(() => {
-    if (settings.pin && settings.sheetUrl) {
-      localStorage.setItem(STORAGE_KEY, 'true');
-      navigate('/');
+    const saved = getSettings();
+    if (saved.pin && saved.sheetUrl) {
+      localStorage.setItem('svaks_setup_complete', 'true');
+      setTimeout(() => navigate('/'), 100);
     }
-  }, [settings.pin, settings.sheetUrl]);
+  }, [navigate]);
 
   const markSetupComplete = () => {
     localStorage.setItem(STORAGE_KEY, 'true');
@@ -72,7 +77,14 @@ function SetupWizard() {
     }
   };
 
-  const handleNext = async () => {
+  const saveSettings = (sheetUrl, pin) => {
+    const current = getSettings();
+    const updated = { ...current, sheetUrl, pin };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
+    return updated;
+  };
+
+  const handleNext = () => {
     setError('');
     
     if (step === 1) {
@@ -87,9 +99,7 @@ function SetupWizard() {
         return;
       }
 
-      setLoading(true);
-      updateSetting('sheetUrl', formData.sheetUrl);
-      setLoading(false);
+      saveSettings(formData.sheetUrl, null);
       setStep(2);
     } 
     else if (step === 2) {
@@ -101,6 +111,7 @@ function SetupWizard() {
         setError('PIN must be numbers only');
         return;
       }
+      saveSettings(formData.sheetUrl, formData.pin);
       setStep(3);
     }
     else if (step === 3) {
@@ -109,14 +120,9 @@ function SetupWizard() {
         return;
       }
       
-      setLoading(true);
-      updateSetting('pin', formData.pin);
-      markSetupComplete();
-      
-      setTimeout(() => {
-        setLoading(false);
-        navigate('/');
-      }, 500);
+      saveSettings(formData.sheetUrl, formData.pin);
+      localStorage.setItem('svaks_setup_complete', 'true');
+      navigate('/');
     }
   };
 
@@ -316,24 +322,21 @@ function SetupWizard() {
           
           <button
             onClick={handleNext}
-            disabled={loading}
             style={{
               flex: 1,
               padding: '14px',
-              background: loading 
-                ? '#ccc' 
-                : 'linear-gradient(135deg, #FF9933, #E8820C)',
+              background: 'linear-gradient(135deg, #FF9933, #E8820C)',
               color: 'white',
               border: 'none',
               borderRadius: '12px',
               fontSize: '16px',
               fontWeight: '600',
-              cursor: loading ? 'not-allowed' : 'pointer',
+              cursor: 'pointer',
               fontFamily: 'Inter, sans-serif',
-              boxShadow: loading ? 'none' : '0 4px 15px rgba(255,153,51,0.3)'
+              boxShadow: '0 4px 15px rgba(255,153,51,0.3)'
             }}
           >
-            {loading ? 'Checking...' : step === 3 ? 'Complete ✓' : 'Next →'}
+            {step === 3 ? 'Complete ✓' : 'Next →'}
           </button>
         </div>
 
