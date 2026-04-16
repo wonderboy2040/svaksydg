@@ -1120,12 +1120,13 @@ function doGet(e) {
               />
             </div>
             <div className="settings-field">
-              <label>Google Sheets URL</label>
+              <label>Google Apps Script Web App URL *</label>
               <input
                 value={form.sheetUrl}
                 onChange={e => setForm(prev => ({ ...prev, sheetUrl: e.target.value }))}
-                placeholder="https://script.google.com/..."
+                placeholder="https://script.google.com/macros/s/.../exec"
               />
+              <small style={{ color: '#888', fontSize: '11px' }}>Paste the Web App URL (not spreadsheet URL)</small>
             </div>
           </div>
           <div className="settings-actions">
@@ -1179,14 +1180,19 @@ function doGet(e) {
         <div className="settings-section">
           <h4>Google Sheets Setup</h4>
           <p style={{ color: '#666', fontSize: '14px', marginBottom: '12px', lineHeight: '1.6' }}>
-            To sync with Google Sheets, setup Apps Script first:
+            <strong>Step-by-step:</strong>
           </p>
           <ol style={{ paddingLeft: '20px', color: '#555', fontSize: '14px', lineHeight: '2' }}>
             <li>Go to <strong>Google Sheets</strong> and create new spreadsheet</li>
             <li>Click <strong>Extensions → Apps Script</strong></li>
-            <li>Copy the code below and <strong>Deploy → New Deployment</strong></li>
-            <li>Select <strong>Web app</strong>, Execute as <strong>"Me"</strong>, Access <strong>"Anyone"</strong></li>
-            <li>Copy the Web App URL and paste in Settings above</li>
+            <li>Delete any code there, copy the code below and paste</li>
+            <li>Click <strong>Save</strong> (blue button)</li>
+            <li>Click <strong>Deploy → New Deployment</strong></li>
+            <li>Select <strong>Web app</strong>, Description: <strong>SVAKS Sync</strong></li>
+            <li><strong>Execute as:</strong> Me | <strong>Who has access:</strong> Anyone</li>
+            <li>Click <strong>Deploy</strong></li>
+            <li><strong>Copy the Web App URL</strong> (not the spreadsheet URL!)</li>
+            <li>Paste that URL in the field above</li>
           </ol>
           <textarea
             className="code-block"
