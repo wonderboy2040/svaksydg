@@ -7,15 +7,30 @@ import SetupWizard from './pages/SetupWizard';
 
 const SETUP_KEY = 'svaks_setup_complete';
 
+function checkSetupDone() {
+  const setupDone = localStorage.getItem(SETUP_KEY);
+  if (setupDone === 'true') return true;
+  
+  try {
+    const data = localStorage.getItem('svaks_data');
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (parsed.settings?.pin && parsed.settings?.sheetUrl) {
+        localStorage.setItem(SETUP_KEY, 'true');
+        return true;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
 function App() {
   const [initializing, setInitializing] = useState(true);
-  const [needsSetup, setNeedsSetup] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(true);
 
   useEffect(() => {
-    const setupDone = localStorage.getItem(SETUP_KEY);
-    if (!setupDone) {
-      setNeedsSetup(true);
-    }
+    const done = checkSetupDone();
+    setNeedsSetup(!done);
     setInitializing(false);
   }, []);
 

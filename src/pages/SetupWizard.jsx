@@ -6,7 +6,7 @@ const STORAGE_KEY = 'svaks_setup_complete';
 
 function SetupWizard() {
   const navigate = useNavigate();
-  const { updateSetting, update, settings } = useData();
+  const { settings } = useData();
   
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -19,11 +19,11 @@ function SetupWizard() {
   });
 
   useEffect(() => {
-    if (settings.pin) {
-      markSetupComplete();
+    if (settings.pin && settings.sheetUrl) {
+      localStorage.setItem(STORAGE_KEY, 'true');
       navigate('/');
     }
-  }, []);
+  }, [settings.pin, settings.sheetUrl]);
 
   const markSetupComplete = () => {
     localStorage.setItem(STORAGE_KEY, 'true');
@@ -35,23 +35,24 @@ function SetupWizard() {
 
   const validateSheetUrl = async (url) => {
     if (!url) return { valid: false, error: 'URL required' };
-    if (!url.includes('docs.google.com/spreadsheets')) {
-      return { valid: false, error: 'Must be Google Sheets URL' };
-    }
-    if (!url.includes('/edit') && !url.includes('/exec')) {
-      return { valid: false, error: 'Invalid Sheets URL format' };
+    
+    const isSheets = url.includes('docs.google.com/spreadsheets') && (url.includes('/edit') || url.includes('/exec'));
+    const isAppsScript = url.includes('script.google.com/macros/exec');
+    
+    if (!isSheets && !isAppsScript) {
+      return { valid: false, error: 'Enter Google Sheet OR AppsScript WebApp URL' };
     }
     return { valid: true };
   };
 
   const testConnection = async (url) => {
     let testUrl = url;
-    if (url.includes('/edit')) {
-      testUrl = url.replace('/edit', '/exec');
-    }
-    if (url.includes('/load')) {
-      testUrl = url;
-    } else {
+    
+    if (url.includes('script.google.com/macros/exec')) {
+      testUrl = url.includes('/load') ? url : url + '/load';
+    } else if (url.includes('/edit')) {
+      testUrl = url.replace('/edit', '/exec') + '/load';
+    } else if (!url.includes('/load')) {
       testUrl = url.replace(/\/exec.*/, '/exec') + '/load';
     }
     
