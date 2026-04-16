@@ -89,7 +89,8 @@ function loadFromStorage() {
         expenditure: parsed.expenditure || [],
         committee: parsed.committee || defaultCommittee.map(c => ({ ...c })),
         notifications: parsed.notifications || defaultNotifications.map(n => ({ ...n })),
-        settings: settings
+        settings: settings,
+        _fromStorage: true  // Flag to track if data came from localStorage
       };
     }
   } catch (e) {
@@ -101,7 +102,8 @@ function loadFromStorage() {
     expenditure: [],
     committee: defaultCommittee.map(c => ({ ...c })),
     notifications: defaultNotifications.map(n => ({ ...n })),
-    settings: { ...defaultSettings }
+    settings: { ...defaultSettings },
+    _fromStorage: true
   };
 }
 
@@ -115,14 +117,30 @@ function saveToStorage(data) {
 
 export function DataProvider({ children }) {
   const [data, setData] = useState(loadFromStorage);
-  const [syncStatus, setSyncStatus] = useState('idle'); // idle | loading | syncing | synced | error
+  const [syncStatus, setSyncStatus] = useState('idle');
   const [syncError, setSyncError] = useState('');
   const [syncLastTime, setSyncLastTime] = useState(null);
   const [sheetsLoaded, setSheetsLoaded] = useState(false);
+  const [lastSyncHash, setLastSyncHash] = useState('');
   const syncTimeoutRef = useRef(null);
+  const pollIntervalRef = useRef(null);
   const hasAutoSyncedRef = useRef(false);
 
-  // ========== STEP 1: AUTO-LOAD FROM GOOGLE SHEETS ON START ==========
+  // Generate hash of cloud data to detect changes
+  const generateDataHash = (sheetData) => {
+    const relevant = {
+      m: sheetData.members?.length || 0,
+      c: sheetData.collections?.length || 0,
+      e: sheetData.expenditure?.length || 0,
+      ct: sheetData.committee?.filter(c => c.name)?.length || 0,
+      n: sheetData.notifications?.length || 0,
+      ts: sheetData.settings?.lastUpdated || '',
+      pin: sheetData.settings?.pin || ''  // Include PIN in hash
+    };
+    return JSON.stringify(relevant);
+  };
+
+  // ========== STEP 1: CLOUD-FIRST AUTO-LOAD FROM GOOGLE SHEETS ==========
   useEffect(() => {
     if (sheetsLoaded) return;
     const sheetUrl = data.settings?.sheetUrl;
@@ -138,7 +156,7 @@ export function DataProvider({ children }) {
     (async () => {
       try {
         const loadUrl = sheetUrl.includes('/load') ? sheetUrl : sheetUrl.replace(/\/exec.*/, '/exec') + '/load';
-        console.log('[SVAKS] Loading from Sheets:', loadUrl);
+        console.log('[SVAKS] ☁️ Cloud-first load from Sheets:', loadUrl);
 
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 15000);
@@ -149,7 +167,7 @@ export function DataProvider({ children }) {
         if (cancelled) return;
 
         if (!response.ok) {
-          console.warn('[SVAKS] Sheets returned', response.status, '- using localStorage');
+          console.warn('[SVAKS] ❌ Cloud returned', response.status, '- falling back to localStorage');
           if (!cancelled) { setSheetsLoaded(true); setSyncStatus('idle'); }
           return;
         }
@@ -157,35 +175,52 @@ export function DataProvider({ children }) {
         const sheetData = await response.json();
         if (cancelled) return;
 
-        // Check if there's actually data in Sheets
-        const hasData = (sheetData.members && sheetData.members.length > 0) ||
-          (sheetData.committee && sheetData.committee.some(c => c.name));
+        // Check if cloud has ANY meaningful data
+        const hasCloudData =
+          (sheetData.members && sheetData.members.length > 0) ||
+          (sheetData.committee && sheetData.committee.some(c => c && c.name)) ||
+          (sheetData.collections && sheetData.collections.length > 0) ||
+          (sheetData.settings && sheetData.settings.pin);  // PIN bhi check karo
 
-        if (hasData) {
-          console.log('[SVAKS] ✅ Loaded', sheetData.members?.length || 0, 'members from Sheets');
+        if (hasCloudData) {
+          console.log('[SVAKS] ✅ Cloud data loaded:',
+            (sheetData.members?.length || 0) + ' members,' +
+            (sheetData.committee?.filter(c => c.name)?.length || 0) + ' committee');
+
+          const newHash = generateDataHash(sheetData);
+          setLastSyncHash(newHash);
+
+          // CLOUD DATA IS AUTHORITATIVE - override localStorage completely
           setData({
-            members: sheetData.members || [],
-            collections: sheetData.collections || [],
-            expenditure: sheetData.expenditure || [],
-            committee: sheetData.committee || defaultCommittee.map(c => ({ ...c })),
-            notifications: sheetData.notifications || defaultNotifications.map(n => ({ ...n })),
+            members: Array.isArray(sheetData.members) ? sheetData.members : [],
+            collections: Array.isArray(sheetData.collections) ? sheetData.collections : [],
+            expenditure: Array.isArray(sheetData.expenditure) ? sheetData.expenditure : [],
+            committee: Array.isArray(sheetData.committee)
+              ? sheetData.committee.map(c => ({ ...defaultCommittee.find(dc => dc.position === c.position), ...c }))
+              : defaultCommittee.map(c => ({ ...c })),
+            notifications: Array.isArray(sheetData.notifications)
+              ? sheetData.notifications
+              : defaultNotifications.map(n => ({ ...n })),
             settings: { ...defaultSettings, ...(sheetData.settings || {}), sheetUrl }
           });
+
           setSyncStatus('synced');
+          setSyncLastTime(new Date());
+          console.log('[SVAKS] 🔐 PIN synced from cloud:', sheetData.settings?.pin ? 'Yes' : 'No');
         } else {
-          console.log('[SVAKS] Sheets empty, using localStorage data');
+          console.log('[SVAKS] 📭 Cloud empty, keeping localStorage data');
           setSyncStatus('idle');
         }
       } catch (e) {
         if (cancelled) return;
-        console.warn('[SVAKS] Sheets load failed:', e.message, '- using localStorage');
+        console.warn('[SVAKS] ❌ Cloud load FAILED:', e.message, '- using localStorage (data will sync to cloud on change)');
         setSyncStatus('idle');
       }
       if (!cancelled) setSheetsLoaded(true);
     })();
 
     return () => { cancelled = true; };
-  }, [data.settings?.sheetUrl, sheetsLoaded]);
+  }, []);
 
   // ========== STEP 2: ALWAYS SAVE TO LOCALSTORAGE (instant cache) ==========
   useEffect(() => {
@@ -193,17 +228,17 @@ export function DataProvider({ children }) {
     return () => clearTimeout(timer);
   }, [data]);
 
-  // ========== STEP 3: AUTO-SYNC TO SHEETS (debounced 3s) ==========
+  // ========== STEP 3: AUTO-SYNC TO SHEETS (debounced 2s) ==========
   useEffect(() => {
     const sheetUrl = data.settings?.sheetUrl;
     if (!sheetUrl) { hasAutoSyncedRef.current = false; return; }
 
-    // Skip very first render to avoid sending default empty data over cloud data
+    // Skip sync only if truly empty (no data, no PIN)
     if (!hasAutoSyncedRef.current) {
-      // Check if data has meaningful content before auto-syncing
       const hasContent = data.members.length > 0 ||
         data.committee.some(c => c.name) ||
-        data.collections.length > 0;
+        data.collections.length > 0 ||
+        data.settings.pin;  // PIN bhi content hai!
       if (!hasContent) {
         hasAutoSyncedRef.current = true;
         return;
@@ -214,18 +249,17 @@ export function DataProvider({ children }) {
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
     setSyncStatus('syncing');
-    setSyncError('');
 
     syncTimeoutRef.current = setTimeout(async () => {
       try {
-        console.log('[SVAKS] Auto-syncing to Sheets...');
+        console.log('[SVAKS] 📤 Auto-syncing to cloud...');
         await fetch(sheetUrl, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify(data)
         });
-        console.log('[SVAKS] ✅ Auto-synced');
+        console.log('[SVAKS] ✅ Cloud synced!');
         setSyncStatus('synced');
         setSyncError('');
         setSyncLastTime(new Date());
@@ -234,10 +268,160 @@ export function DataProvider({ children }) {
         setSyncStatus('error');
         setSyncError(e.message);
       }
-    }, 3000);
+    }, 2000);  // 2 second debounce
 
     return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); };
-  }, [data]); // Re-runs every time data changes
+  }, [data]);  // Re-run when ANY data changes (including PIN)
+
+  // ========== STEP 4: AUTO-POLL CLOUD FOR MULTI-DEVICE SYNC (every 30s) ==========
+  useEffect(() => {
+    const sheetUrl = data.settings?.sheetUrl;
+    if (!sheetUrl || !sheetsLoaded) return;
+
+    const currentHashRef = useRef(lastSyncHash);  // Use ref for mutable hash
+
+    const pollCloud = async () => {
+      try {
+        const loadUrl = sheetUrl.includes('/load') ? sheetUrl : sheetUrl.replace(/\/exec.*/, '/exec') + '/load';
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(loadUrl, { signal: controller.signal });
+        clearTimeout(timer);
+
+        if (!response.ok) return;
+
+        const sheetData = await response.json();
+        const newHash = generateDataHash(sheetData);
+
+        // Only update if cloud data has changed
+        if (newHash !== currentHashRef.current) {
+          console.log('[SVAKS] 🔄 Cloud data changed! Syncing to local...');
+          currentHashRef.current = newHash;
+          setLastSyncHash(newHash);
+          setData(prevData => ({
+            members: sheetData.members || [],
+            collections: sheetData.collections || [],
+            expenditure: sheetData.expenditure || [],
+            committee: sheetData.committee || defaultCommittee.map(c => ({ ...c })),
+            notifications: sheetData.notifications || defaultNotifications.map(n => ({ ...n })),
+            settings: { ...defaultSettings, ...(sheetData.settings || {}), sheetUrl }
+          }));
+          setSyncStatus('synced');
+          setSyncLastTime(new Date());
+        } else {
+          console.log('[SVAKS] 👁️ Poll: Cloud data unchanged');
+        }
+      } catch (e) {
+        console.warn('[SVAKS] Cloud poll error:', e.message);
+      }
+    };
+
+    // Poll every 30 seconds
+    pollIntervalRef.current = setInterval(pollCloud, 30000);
+
+    // Initial poll after 3 seconds
+    const initialPoll = setTimeout(pollCloud, 3000);
+
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      clearTimeout(initialPoll);
+    };
+  }, [data.settings?.sheetUrl, sheetsLoaded]);
+
+  // ========== STEP 5: SYNC ON VISIBILITY CHANGE (tab switch) ==========
+  useEffect(() => {
+    const sheetUrl = data.settings?.sheetUrl;
+    if (!sheetUrl || !sheetsLoaded) return;
+
+    const currentHashRef = useRef(lastSyncHash);
+
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[SVAKS] 👁️ Tab visible, checking cloud...');
+        try {
+          const loadUrl = sheetUrl.includes('/load') ? sheetUrl : sheetUrl.replace(/\/exec.*/, '/exec') + '/load';
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 10000);
+
+          const response = await fetch(loadUrl, { signal: controller.signal });
+          clearTimeout(timer);
+
+          if (!response.ok) return;
+
+          const sheetData = await response.json();
+          const newHash = generateDataHash(sheetData);
+
+          if (newHash !== currentHashRef.current) {
+            console.log('[SVAKS] 🔄 Cloud data changed! Syncing...');
+            currentHashRef.current = newHash;
+            setLastSyncHash(newHash);
+            setData(prevData => ({
+              members: sheetData.members || [],
+              collections: sheetData.collections || [],
+              expenditure: sheetData.expenditure || [],
+              committee: sheetData.committee || defaultCommittee.map(c => ({ ...c })),
+              notifications: sheetData.notifications || defaultNotifications.map(n => ({ ...n })),
+              settings: { ...defaultSettings, ...(sheetData.settings || {}), sheetUrl }
+            }));
+            setSyncStatus('synced');
+            setSyncLastTime(new Date());
+          }
+        } catch (e) {
+          console.warn('[SVAKS] Visibility sync error:', e.message);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [data.settings?.sheetUrl, sheetsLoaded]);
+
+  // ========== STEP 6: SYNC ON FOCUS (window focus) ==========
+  useEffect(() => {
+    const sheetUrl = data.settings?.sheetUrl;
+    if (!sheetUrl || !sheetsLoaded) return;
+
+    const currentHashRef = useRef(lastSyncHash);
+
+    const handleWindowFocus = async () => {
+      console.log('[SVAKS] 🎯 Window focused, checking cloud...');
+      try {
+        const loadUrl = sheetUrl.includes('/load') ? sheetUrl : sheetUrl.replace(/\/exec.*/, '/exec') + '/load';
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(loadUrl, { signal: controller.signal });
+        clearTimeout(timer);
+
+        if (!response.ok) return;
+
+        const sheetData = await response.json();
+        const newHash = generateDataHash(sheetData);
+
+        if (newHash !== currentHashRef.current) {
+          console.log('[SVAKS] 🔄 Cloud data changed! Syncing...');
+          currentHashRef.current = newHash;
+          setLastSyncHash(newHash);
+          setData(prevData => ({
+            members: sheetData.members || [],
+            collections: sheetData.collections || [],
+            expenditure: sheetData.expenditure || [],
+            committee: sheetData.committee || defaultCommittee.map(c => ({ ...c })),
+            notifications: sheetData.notifications || defaultNotifications.map(n => ({ ...n })),
+            settings: { ...defaultSettings, ...(sheetData.settings || {}), sheetUrl }
+          }));
+          setSyncStatus('synced');
+          setSyncLastTime(new Date());
+        }
+      } catch (e) {
+        console.warn('[SVAKS] Focus sync error:', e.message);
+      }
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, [data.settings?.sheetUrl, sheetsLoaded]);
 
   // ===== MANUAL: FORCE PUSH to Sheets =====
   const syncToGoogleSheet = useCallback(async () => {
