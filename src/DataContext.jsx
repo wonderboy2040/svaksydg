@@ -35,18 +35,17 @@ function loadFromStorage() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const settings = { ...defaultSettings, ...(parsed.settings || {}) };
       return {
         members: parsed.members || [],
         collections: parsed.collections || [],
         expenditure: parsed.expenditure || [],
         committee: parsed.committee || defaultCommittee.map(c => ({ ...c })),
         notifications: parsed.notifications || defaultNotifications.map(n => ({ ...n })),
-        settings: settings
+        settings: { ...defaultSettings, ...(parsed.settings || {}) }
       };
     }
   } catch (e) {
-    console.error('[SVAKS] localStorage load error:', e);
+    console.error('[SVAKS] localStorage error:', e);
   }
   return {
     members: [],
@@ -62,11 +61,11 @@ function saveToStorage(data) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
-    console.error('[SVAKS] localStorage save error:', e);
+    console.error('[SVAKS] save error:', e);
   }
 }
 
-const validateAndSanitizeMember = (member) => ({
+const validateMember = (member) => ({
   id: Number(member.id) || Date.now(),
   name: String(member.name || '').trim().substring(0, 100),
   father: String(member.father || '').trim().substring(0, 100),
@@ -78,7 +77,7 @@ const validateAndSanitizeMember = (member) => ({
   joinedDate: member.joinedDate || new Date().toISOString().split('T')[0]
 });
 
-const validateAndSanitizeCollection = (collection) => ({
+const validateCollection = (collection) => ({
   id: Number(collection.id) || Date.now(),
   memberId: Number(collection.memberId) || null,
   memberName: String(collection.memberName || '').trim().substring(0, 100),
@@ -88,7 +87,7 @@ const validateAndSanitizeCollection = (collection) => ({
   date: collection.date || new Date().toISOString().split('T')[0]
 });
 
-const validateAndSanitizeExpenditure = (expenditure) => ({
+const validateExpenditure = (expenditure) => ({
   id: Number(expenditure.id) || Date.now(),
   category: String(expenditure.category || 'Other').trim().substring(0, 50),
   amount: Math.abs(Number(expenditure.amount)) || 0,
@@ -96,7 +95,7 @@ const validateAndSanitizeExpenditure = (expenditure) => ({
   date: expenditure.date || new Date().toISOString().split('T')[0]
 });
 
-const validateAndSanitizeNotification = (notification) => ({
+const validateNotification = (notification) => ({
   id: Number(notification.id) || Date.now(),
   title: String(notification.title || '').trim().substring(0, 100),
   text: String(notification.text || '').trim().substring(0, 500),
@@ -104,7 +103,7 @@ const validateAndSanitizeNotification = (notification) => ({
   active: Boolean(notification.active)
 });
 
-const validateAndSanitizeCommittee = (committee) => ({
+const validateCommittee = (committee) => ({
   id: Number(committee.id) || Date.now(),
   position: String(committee.position || '').trim().substring(0, 50),
   name: String(committee.name || '').trim().substring(0, 100),
@@ -118,143 +117,125 @@ export function DataProvider({ children }) {
   const [syncStatus, setSyncStatus] = useState('idle');
   const [syncError, setSyncError] = useState('');
   const [syncLastTime, setSyncLastTime] = useState(null);
-  const [lastCloudVersion, setLastCloudVersion] = useState(0);
+  const [cloudData, setCloudData] = useState(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const syncTimeoutRef = useRef(null);
-  const pollIntervalRef = useRef(null);
-  const isFirstLoad = useRef(true);
+  const pollRef = useRef(null);
+  const isSyncingRef = useRef(false);
 
   const sheetUrl = data.settings?.sheetUrl;
 
-  const getLoadUrl = useCallback((url) => {
+  const getLoadUrl = (url) => {
     if (!url) return '';
     if (url.includes('/load')) return url;
     return url.replace(/\/exec.*/, '/exec') + '/load';
-  }, []);
+  };
 
-  const prepareDataForSync = useCallback((dataToSync) => {
-    return {
-      ...dataToSync,
-      settings: {
-        ...dataToSync.settings,
-        lastUpdated: new Date().toISOString(),
-        version: Date.now()
-      }
-    };
-  }, []);
-
-  const loadFromCloud = useCallback(async (showLoading = false) => {
+  const fetchCloudData = useCallback(async (showStatus = false) => {
     if (!sheetUrl) return null;
-    if (showLoading) setSyncStatus('loading');
+    if (showStatus) setSyncStatus('loading');
 
     try {
       const loadUrl = getLoadUrl(sheetUrl);
-      console.log('[SVAKS] Loading from cloud:', loadUrl);
-
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), 12000);
 
       const response = await fetch(loadUrl, { signal: controller.signal });
-      clearTimeout(timer);
+      clearTimeout(timeout);
 
       if (!response.ok) {
-        console.warn('[SVAKS] Cloud response:', response.status);
-        if (showLoading) setSyncStatus('idle');
+        if (showStatus) setSyncStatus('idle');
         return null;
       }
 
-      const cloudData = await response.json();
-      console.log('[SVAKS] Cloud data version:', cloudData.settings?.version);
-      return cloudData;
+      const result = await response.json();
+      return result;
     } catch (e) {
-      console.error('[SVAKS] Load error:', e.message);
-      if (showLoading) {
+      console.error('[SVAKS] Fetch error:', e.message);
+      if (showStatus) {
         setSyncStatus('error');
         setSyncError(e.message);
       }
       return null;
     }
-  }, [sheetUrl, getLoadUrl]);
+  }, [sheetUrl]);
 
   const pushToCloud = useCallback(async (dataToPush) => {
-    if (!sheetUrl) return false;
+    if (!sheetUrl || isSyncingRef.current) return false;
+    isSyncingRef.current = true;
 
     try {
-      const dataWithVersion = prepareDataForSync(dataToPush);
-      console.log('[SVAKS] Pushing to cloud, version:', dataWithVersion.settings.version);
+      const dataWithMeta = {
+        ...dataToPush,
+        _syncVersion: Date.now(),
+        _lastSync: new Date().toISOString()
+      };
 
       await fetch(sheetUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(dataWithVersion)
+        body: JSON.stringify(dataWithMeta)
       });
 
       setSyncStatus('synced');
       setSyncLastTime(new Date());
+      setSyncError('');
       return true;
     } catch (e) {
       console.error('[SVAKS] Push error:', e.message);
       setSyncStatus('error');
       setSyncError(e.message);
       return false;
+    } finally {
+      isSyncingRef.current = false;
     }
-  }, [sheetUrl, prepareDataForSync]);
+  }, [sheetUrl]);
 
-  const syncWithCloud = useCallback(async (forceUpdate = false) => {
-    const cloudData = await loadFromCloud(true);
-    if (!cloudData) return;
+  const loadFromCloud = useCallback(async () => {
+    const cloud = await fetchCloudData(true);
+    if (!cloud) return;
 
-    const cloudVersion = cloudData.settings?.version || 0;
-    const localVersion = data.settings?.version || 0;
+    const hasContent =
+      (cloud.members?.length > 0) ||
+      (cloud.committee?.some(c => c.name)) ||
+      (cloud.collections?.length > 0) ||
+      cloud.settings?.pin;
 
-    console.log('[SVAKS] Comparing versions - Cloud:', cloudVersion, 'Local:', localVersion);
-
-    const hasCloudData =
-      (cloudData.members?.length > 0) ||
-      (cloudData.committee?.some(c => c.name)) ||
-      (cloudData.collections?.length > 0) ||
-      cloudData.settings?.pin;
-
-    if (!hasCloudData) {
-      console.log('[SVAKS] Cloud empty, keeping local data');
+    if (!hasContent) {
       setSyncStatus('idle');
       return;
     }
 
-    if (forceUpdate || cloudVersion > localVersion || isFirstLoad.current) {
-      console.log('[SVAKS] Updating local data from cloud');
-      isFirstLoad.current = false;
+    const localVersion = data.settings?._syncVersion || 0;
+    const cloudVersion = cloud._syncVersion || 0;
 
+    if (cloudVersion > localVersion || !initialLoadDone) {
       setData({
-        members: Array.isArray(cloudData.members) ? cloudData.members : [],
-        collections: Array.isArray(cloudData.collections) ? cloudData.collections : [],
-        expenditure: Array.isArray(cloudData.expenditure) ? cloudData.expenditure : [],
-        committee: Array.isArray(cloudData.committee)
-          ? cloudData.committee.map(c => ({ ...defaultCommittee.find(dc => dc.position === c.position), ...c }))
+        members: Array.isArray(cloud.members) ? cloud.members : [],
+        collections: Array.isArray(cloud.collections) ? cloud.collections : [],
+        expenditure: Array.isArray(cloud.expenditure) ? cloud.expenditure : [],
+        committee: Array.isArray(cloud.committee)
+          ? cloud.committee.map(c => ({ ...defaultCommittee.find(dc => dc.position === c.position), ...c }))
           : defaultCommittee.map(c => ({ ...c })),
-        notifications: Array.isArray(cloudData.notifications)
-          ? cloudData.notifications
+        notifications: Array.isArray(cloud.notifications)
+          ? cloud.notifications
           : defaultNotifications.map(n => ({ ...n })),
-        settings: { ...defaultSettings, ...(cloudData.settings || {}), sheetUrl }
+        settings: { ...defaultSettings, ...(cloud.settings || {}), sheetUrl }
       });
-
-      setLastCloudVersion(cloudVersion);
-      setSyncStatus('synced');
-      setSyncLastTime(new Date());
-    } else if (cloudVersion === localVersion) {
-      console.log('[SVAKS] Versions equal, no update needed');
-      setSyncStatus('synced');
+      setInitialLoadDone(true);
     }
-  }, [loadFromCloud, data, sheetUrl]);
+
+    setSyncStatus('synced');
+    setSyncLastTime(new Date());
+  }, [fetchCloudData, data.settings?._syncVersion, initialLoadDone, sheetUrl]);
 
   useEffect(() => {
-    if (!sheetUrl) {
-      setSyncStatus('idle');
-      return;
+    if (sheetUrl && !initialLoadDone) {
+      console.log('[SVAKS] Initial cloud load...');
+      loadFromCloud();
     }
-
-    syncWithCloud(true);
-  }, []);
+  }, [sheetUrl, initialLoadDone, loadFromCloud]);
 
   useEffect(() => {
     const timer = setTimeout(() => saveToStorage(data), 100);
@@ -263,122 +244,105 @@ export function DataProvider({ children }) {
 
   useEffect(() => {
     if (!sheetUrl) return;
-
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
     setSyncStatus('syncing');
-
     syncTimeoutRef.current = setTimeout(() => {
       pushToCloud(data);
-    }, 1500);
+    }, 2000);
 
-    return () => {
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-    };
+    return () => clearTimeout(syncTimeoutRef.current);
   }, [data, sheetUrl, pushToCloud]);
 
   useEffect(() => {
     if (!sheetUrl) return;
 
-    const pollCloud = async () => {
-      const cloudData = await loadFromCloud(false);
-      if (!cloudData) return;
+    const poll = async () => {
+      const cloud = await fetchCloudData(false);
+      if (!cloud) return;
 
-      const cloudVersion = cloudData.settings?.version || 0;
-      const localVersion = data.settings?.version || 0;
+      const cloudVersion = cloud._syncVersion || 0;
+      const localVersion = data.settings?._syncVersion || 0;
 
       if (cloudVersion > localVersion) {
-        console.log('[SVAKS] Poll: Newer data found, updating...');
+        console.log('[SVAKS] Poll: New data detected, updating...');
+
         setData({
-          members: Array.isArray(cloudData.members) ? cloudData.members : [],
-          collections: Array.isArray(cloudData.collections) ? cloudData.collections : [],
-          expenditure: Array.isArray(cloudData.expenditure) ? cloudData.expenditure : [],
-          committee: Array.isArray(cloudData.committee)
-            ? cloudData.committee.map(c => ({ ...defaultCommittee.find(dc => dc.position === c.position), ...c }))
+          members: Array.isArray(cloud.members) ? cloud.members : [],
+          collections: Array.isArray(cloud.collections) ? cloud.collections : [],
+          expenditure: Array.isArray(cloud.expenditure) ? cloud.expenditure : [],
+          committee: Array.isArray(cloud.committee)
+            ? cloud.committee.map(c => ({ ...defaultCommittee.find(dc => dc.position === c.position), ...c }))
             : defaultCommittee.map(c => ({ ...c })),
-          notifications: Array.isArray(cloudData.notifications)
-            ? cloudData.notifications
+          notifications: Array.isArray(cloud.notifications)
+            ? cloud.notifications
             : defaultNotifications.map(n => ({ ...n })),
-          settings: { ...defaultSettings, ...(cloudData.settings || {}), sheetUrl }
+          settings: { ...defaultSettings, ...(cloud.settings || {}), sheetUrl }
         });
-        setLastCloudVersion(cloudVersion);
+
         setSyncStatus('synced');
         setSyncLastTime(new Date());
       }
     };
 
-    pollIntervalRef.current = setInterval(pollCloud, 15000);
+    pollRef.current = setInterval(poll, 10000);
 
-    const earlyCheck = setTimeout(pollCloud, 2000);
+    const quickCheck = setTimeout(poll, 3000);
 
     return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-      clearTimeout(earlyCheck);
+      if (pollRef.current) clearInterval(pollRef.current);
+      clearTimeout(quickCheck);
     };
-  }, [sheetUrl, loadFromCloud, data.settings?.version]);
+  }, [sheetUrl, fetchCloudData, data.settings?._syncVersion]);
 
   useEffect(() => {
     if (!sheetUrl) return;
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        console.log('[SVAKS] Tab visible, checking cloud...');
-        syncWithCloud(false);
+        console.log('[SVAKS] Tab visible, syncing...');
+        loadFromCloud();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [sheetUrl, syncWithCloud]);
+  }, [sheetUrl, loadFromCloud]);
 
   useEffect(() => {
     if (!sheetUrl) return;
 
     const handleFocus = () => {
-      console.log('[SVAKS] Window focused, checking cloud...');
-      syncWithCloud(false);
+      console.log('[SVAKS] Window focused...');
+      loadFromCloud();
     };
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [sheetUrl, syncWithCloud]);
+  }, [sheetUrl, loadFromCloud]);
 
   const syncToGoogleSheet = useCallback(async () => {
     if (!sheetUrl) {
-      alert('⚠️ Google Sheets URL nahi mila!');
+      alert('Google Sheets URL nahi mila!');
       return;
     }
     setSyncStatus('syncing');
     const success = await pushToCloud(data);
     if (success) {
-      alert('✅ Data Google Sheets pe bhej diya gaya!');
-    } else {
-      alert('❌ Sync error!');
+      alert('Data Google Sheets mein save ho gaya!');
     }
   }, [sheetUrl, pushToCloud, data]);
 
   const loadFromGoogleSheet = useCallback(async () => {
     if (!sheetUrl) {
-      alert('⚠️ Google Sheets URL nahi mila!');
+      alert('Google Sheets URL nahi mila!');
       return;
     }
-    if (!confirm('Google Sheets se data load karna hai?')) return;
+    if (!confirm('Cloud se data load karna hai?')) return;
 
     setSyncStatus('loading');
-    const cloudData = await loadFromCloud(true);
-    if (cloudData) {
-      setData({
-        members: cloudData.members || [],
-        collections: cloudData.collections || [],
-        expenditure: cloudData.expenditure || [],
-        committee: cloudData.committee || defaultCommittee.map(c => ({ ...c })),
-        notifications: cloudData.notifications || defaultNotifications.map(n => ({ ...n })),
-        settings: { ...defaultSettings, ...(cloudData.settings || {}), sheetUrl }
-      });
-      setSyncStatus('synced');
-      setSyncLastTime(new Date());
-      alert('✅ Data load ho gaya!');
-    }
+    await loadFromCloud();
+    alert('Data load ho gaya!');
   }, [sheetUrl, loadFromCloud]);
 
   const update = useCallback((key, value) => {
@@ -388,28 +352,28 @@ export function DataProvider({ children }) {
   const updateSetting = useCallback((key, value) => {
     setData(prev => ({
       ...prev,
-      settings: { ...prev.settings, [key]: value, version: Date.now() }
+      settings: { ...prev.settings, [key]: value }
     }));
   }, []);
 
   const updateCommittee = useCallback((id, fields) => {
     setData(prev => ({
       ...prev,
-      committee: prev.committee.map(c => c.id === id ? { ...c, ...validateAndSanitizeCommittee({ ...c, ...fields }) } : c)
+      committee: prev.committee.map(c => c.id === id ? { ...c, ...validateCommittee({ ...c, ...fields }) } : c)
     }));
   }, []);
 
   const addMember = useCallback((member) => {
     setData(prev => {
-      const s = validateAndSanitizeMember({ ...member, monthlyFee: member.monthlyFee || prev.settings.monthlyFee });
-      return { ...prev, members: [...prev.members, s] };
+      const m = validateMember({ ...member, monthlyFee: member.monthlyFee || prev.settings.monthlyFee });
+      return { ...prev, members: [...prev.members, m] };
     });
   }, []);
 
   const updateMember = useCallback((id, fields) => {
     setData(prev => ({
       ...prev,
-      members: prev.members.map(m => m.id === id ? { ...m, ...validateAndSanitizeMember({ ...m, ...fields }) } : m)
+      members: prev.members.map(m => m.id === id ? { ...m, ...validateMember({ ...m, ...fields }) } : m)
     }));
   }, []);
 
@@ -419,15 +383,15 @@ export function DataProvider({ children }) {
 
   const addCollection = useCallback((collection) => {
     setData(prev => {
-      const s = validateAndSanitizeCollection(collection);
-      return { ...prev, collections: [...prev.collections, s] };
+      const c = validateCollection(collection);
+      return { ...prev, collections: [...prev.collections, c] };
     });
   }, []);
 
   const updateCollection = useCallback((id, fields) => {
     setData(prev => ({
       ...prev,
-      collections: prev.collections.map(c => c.id === id ? { ...c, ...validateAndSanitizeCollection({ ...c, ...fields }) } : c)
+      collections: prev.collections.map(c => c.id === id ? { ...c, ...validateCollection({ ...c, ...fields }) } : c)
     }));
   }, []);
 
@@ -437,15 +401,15 @@ export function DataProvider({ children }) {
 
   const addExpenditure = useCallback((expenditure) => {
     setData(prev => {
-      const s = validateAndSanitizeExpenditure(expenditure);
-      return { ...prev, expenditure: [...prev.expenditure, s] };
+      const e = validateExpenditure(expenditure);
+      return { ...prev, expenditure: [...prev.expenditure, e] };
     });
   }, []);
 
   const updateExpenditure = useCallback((id, fields) => {
     setData(prev => ({
       ...prev,
-      expenditure: prev.expenditure.map(e => e.id === id ? { ...e, ...validateAndSanitizeExpenditure({ ...e, ...fields }) } : e)
+      expenditure: prev.expenditure.map(e => e.id === id ? { ...e, ...validateExpenditure({ ...e, ...fields }) } : e)
     }));
   }, []);
 
@@ -455,15 +419,15 @@ export function DataProvider({ children }) {
 
   const addNotification = useCallback((notification) => {
     setData(prev => {
-      const s = validateAndSanitizeNotification(notification);
-      return { ...prev, notifications: [s, ...prev.notifications] };
+      const n = validateNotification(notification);
+      return { ...prev, notifications: [n, ...prev.notifications] };
     });
   }, []);
 
   const updateNotification = useCallback((id, fields) => {
     setData(prev => ({
       ...prev,
-      notifications: prev.notifications.map(n => n.id === id ? { ...n, ...validateAndSanitizeNotification({ ...n, ...fields }) } : n)
+      notifications: prev.notifications.map(n => n.id === id ? { ...n, ...validateNotification({ ...n, ...fields }) } : n)
     }));
   }, []);
 
@@ -518,7 +482,7 @@ export function DataProvider({ children }) {
 
 export function useData() {
   const ctx = useContext(DataContext);
-  if (!ctx) throw new Error('useData must be used inside DataProvider');
+  if (!ctx) throw new Error('useData must be inside DataProvider');
   return ctx;
 }
 

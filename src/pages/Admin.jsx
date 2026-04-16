@@ -1017,25 +1017,29 @@ function SettingsSection() {
       var headers = Object.keys(rows[0]);
       sheet.appendRow(headers);
       rows.forEach(function(item) {
-        sheet.appendRow(headers.map(h => item[h] !== undefined ? item[h] : ''));
+        sheet.appendRow(headers.map(function(h) { return item[h] !== undefined ? item[h] : ''; }));
       });
     }
   }
 
-  // Add timestamp for multi-device sync detection
+  // Save sync metadata (version, lastSync) in Settings sheet
   var settingsSheet = ss.getSheetByName('Settings');
   if (!settingsSheet) settingsSheet = ss.insertSheet('Settings');
-  var lastRow = settingsSheet.getLastRow();
-  if (lastRow > 1) {
-    settingsSheet.getRange(lastRow, 1, 1, 2).clearContent();
+  settingsSheet.clear();
+  settingsSheet.appendRow(['key', 'value']);
+  if (data._syncVersion) settingsSheet.appendRow(['_syncVersion', data._syncVersion]);
+  if (data._lastSync) settingsSheet.appendRow(['_lastSync', data._lastSync]);
+  if (data.settings) {
+    Object.keys(data.settings).forEach(function(key) {
+      settingsSheet.appendRow([key, data.settings[key]]);
+    });
   }
-  settingsSheet.appendRow(['lastUpdated', new Date().toISOString()]);
 
   return ContentService.createTextOutput('OK');
 }
 
 function doGet(e) {
-  if (e.parameter.action === 'load') {
+  if (e.parameter.action === 'load' || e.parameter.load === 'true') {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = {};
     var sheetNames = ['Members', 'Collections', 'Expenditure', 'Committee', 'Settings'];
@@ -1058,6 +1062,26 @@ function doGet(e) {
         }
       }
     }
+
+    // Load sync metadata from Settings
+    var settingsSheet = ss.getSheetByName('Settings');
+    if (settingsSheet) {
+      var settingsData = settingsSheet.getDataRange().getValues();
+      var settings = {};
+      for (var j = 1; j < settingsData.length; j++) {
+        var key = settingsData[j][0];
+        var value = settingsData[j][1];
+        if (key === '_syncVersion' || key === '_lastSync') {
+          data[key] = value;
+        } else if (key) {
+          settings[key] = value;
+        }
+      }
+      if (Object.keys(settings).length > 0) {
+        data.settings = settings;
+      }
+    }
+
     return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
   }
   return ContentService.createTextOutput('Use POST to sync data');
