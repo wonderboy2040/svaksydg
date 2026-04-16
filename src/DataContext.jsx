@@ -29,6 +29,17 @@ const defaultCommittee = [
 ];
 
 const STORAGE_KEY = 'svaks_data';
+const DEVICE_ID_KEY = 'svaks_device_id';
+const LAST_HASH_KEY = 'svaks_last_hash';
+
+function getOrCreateDeviceId() {
+  let deviceId = sessionStorage.getItem(DEVICE_ID_KEY);
+  if (!deviceId) {
+    deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+    sessionStorage.setItem(DEVICE_ID_KEY, deviceId);
+  }
+  return deviceId;
+}
 
 const validateAndSanitizeMember = (member) => ({
   id: Number(member.id) || Date.now(),
@@ -121,13 +132,25 @@ export function DataProvider({ children }) {
   const [syncError, setSyncError] = useState('');
   const [syncLastTime, setSyncLastTime] = useState(null);
   const [sheetsLoaded, setSheetsLoaded] = useState(false);
-  const [lastSyncHash, setLastSyncHash] = useState('');
+  const [lastSyncHash, setLastSyncHash] = useState(() => sessionStorage.getItem(LAST_HASH_KEY) || '');
+  const [localDataHash, setLocalDataHash] = useState('');
   const syncTimeoutRef = useRef(null);
   const pollIntervalRef = useRef(null);
   const hasAutoSyncedRef = useRef(false);
+  const currentDeviceId = useRef(getOrCreateDeviceId());
 
   // Generate hash of cloud data to detect changes
   const generateDataHash = (sheetData) => {
+    const simpleHash = (str) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      return hash;
+    };
+    
     const relevant = {
       m: sheetData.members?.length || 0,
       c: sheetData.collections?.length || 0,
@@ -135,9 +158,33 @@ export function DataProvider({ children }) {
       ct: sheetData.committee?.filter(c => c.name)?.length || 0,
       n: sheetData.notifications?.length || 0,
       ts: sheetData.settings?.lastUpdated || '',
-      pin: sheetData.settings?.pin || ''  // Include PIN in hash
+      pin: sheetData.settings?.pin || '',
+      mHash: simpleHash(JSON.stringify(sheetData.members?.slice(0, 5) || [])),
+      cHash: simpleHash(JSON.stringify(sheetData.collections?.slice(0, 5) || [])),
+      ctHash: simpleHash(JSON.stringify(sheetData.committee?.filter(c => c.name) || [])),
+      nHash: simpleHash(JSON.stringify(sheetData.notifications?.slice(0, 3) || []))
     };
     return JSON.stringify(relevant);
+  };
+
+  const generateQuickHash = (data) => {
+    const simpleHash = (str) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      return hash;
+    };
+    return simpleHash(
+      data.members?.length + '|' +
+      data.collections?.length + '|' +
+      data.expenditure?.length + '|' +
+      (data.committee?.filter(c => c.name).length || 0) + '|' +
+      (data.notifications?.length || 0) + '|' +
+      data.settings?.pin || ''
+    );
   };
 
   // ========== STEP 1: CLOUD-FIRST AUTO-LOAD FROM GOOGLE SHEETS ==========
@@ -189,6 +236,7 @@ export function DataProvider({ children }) {
 
           const newHash = generateDataHash(sheetData);
           setLastSyncHash(newHash);
+          sessionStorage.setItem(LAST_HASH_KEY, newHash);
 
           // CLOUD DATA IS AUTHORITATIVE - override localStorage completely
           setData({
@@ -299,6 +347,7 @@ export function DataProvider({ children }) {
           console.log('[SVAKS] 🔄 Cloud data changed! Syncing to local...');
           currentHashRef.current = newHash;
           setLastSyncHash(newHash);
+          sessionStorage.setItem(LAST_HASH_KEY, newHash);
           setData(prevData => ({
             members: sheetData.members || [],
             collections: sheetData.collections || [],

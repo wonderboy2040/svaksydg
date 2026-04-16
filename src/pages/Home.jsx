@@ -7,35 +7,7 @@ import '../styles/Home.css';
 function AnimatedNumber({ value, duration = 1500 }) {
   const [count, setCount] = useState(0);
 
-  useEffect(() => {
-    let start = 0;
-    const end = value;
-    const incrementTime = duration / Math.max(end, 1);
-    const timer = setInterval(() => {
-      start++;
-      setCount(start);
-      if (start >= end) clearInterval(timer);
-    }, incrementTime > 0 ? incrementTime : 10);
-    return () => clearInterval(timer);
-  }, [value, duration]);
-
-  return <span>{count.toLocaleString('en-IN')}</span>;
-}
-
-function Home() {
-  const { members, collections, expenditure, committee, settings, notifications } = useData();
-  const [visibleSections, setVisibleSections] = useState({});
-  const [scrolled, setScrolled] = useState(false);
-  const [activeNotification, setActiveNotification] = useState(0);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const activeNotifs = notifications.filter(n => n.active);
-
-  const totalCollections = collections.reduce((sum, c) => sum + Number(c.amount || 0), 0);
-  const totalExpenditure = expenditure.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const balance = totalCollections - totalExpenditure;
-
-  useEffect(() => {
+useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
       const sections = ['home', 'stats', 'about', 'committee', 'notifications', 'info'];
@@ -177,24 +149,15 @@ function Home() {
           </div>
           <div className="notification-content">
             {activeNotifs.length > 0 ? (
-              <>
-                <div className="notification-active">
-                  <span className="notification-badge">{activeNotifs[activeNotification].title}</span>
-                  <p>{activeNotifs[activeNotification].text}</p>
-                  <span className="notification-date">{activeNotifs[activeNotification].date}</span>
+              activeNotifs.map((notif, i) => (
+                <div key={notif.id} className="notification-card">
+                  <span className="notification-badge">{notif.title}</span>
+                  <p>{notif.text}</p>
+                  <span className="notification-date">{notif.date}</span>
                 </div>
-                <div className="notification-dots">
-                  {activeNotifs.map((_, i) => (
-                    <span
-                      key={i}
-                      className={`notif-dot ${i === activeNotification ? 'active' : ''}`}
-                      onClick={() => setActiveNotification(i)}
-                    ></span>
-                  ))}
-                </div>
-              </>
+              ))
             ) : (
-              <p style={{ color: 'rgba(255,255,255,0.5)' }}>No notices to display</p>
+              <div className="notification-empty">No notices to display</div>
             )}
           </div>
           <div className="notification-border"></div>

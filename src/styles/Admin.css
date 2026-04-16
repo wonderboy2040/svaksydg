@@ -1116,7 +1116,7 @@ textarea.code-block {
     gap: 12px;
   }
 
-  .form-group input,
+.form-group input,
   .form-group select {
     padding: 10px 12px;
     font-size: 14px;
@@ -1132,45 +1132,81 @@ textarea.code-block {
   }
 }
 
-@media (max-width: 500px) {
-  .summary-grid {
-    grid-template-columns: 1fr;
-  }
+/* ===== NOTIFICATIONS LIST ===== */
+.notifications-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 
-  .summary-card .big-number {
-    font-size: 22px;
-  }
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border: 1px solid rgba(212, 160, 23, 0.2);
+  border-radius: 16px;
+  padding: 20px;
+  transition: all 0.3s;
+}
 
-  .admin-card h3 {
-    font-size: 15px;
-  }
+.notification-item:hover {
+  border-color: var(--gold);
+  background: linear-gradient(135deg, rgba(212, 160, 23, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+  transform: translateX(4px);
+}
 
-  .btn-action {
-    padding: 6px 10px;
-    font-size: 11px;
-    margin-right: 4px;
-  }
+.notification-number {
+  min-width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--saffron), var(--gold));
+  border-radius: 50%;
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+}
 
-  .badge {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
+.notification-content-admin {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
-  .notifications-list {
-    gap: 12px;
-  }
+.notification-content-admin .notification-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, var(--saffron), #E8820C);
+  color: white;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  width: fit-content;
+}
 
-  .notification-item {
-    padding: 14px;
-    flex-direction: column;
-    gap: 10px;
-  }
+.notification-content-admin p {
+  color: white;
+  font-size: 15px;
+  line-height: 1.5;
+  margin: 0;
+}
 
-  .notification-number {
-    width: 28px;
-    height: 28px;
-    font-size: 12px;
-  }
+.notification-date-admin {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notification-date-admin::before {
+  content: '📅';
+  font-size: 12px;
 }
 
 @media (max-width: 600px) {

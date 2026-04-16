@@ -1251,9 +1251,10 @@ function doGet(e) {
 
 // ===== NOTIFICATIONS SECTION =====
 function NotificationsSection() {
-  const { notifications, addNotification, deleteNotification } = useData();
+  const { notifications, addNotification, updateNotification, deleteNotification } = useData();
   const { addToast: toast } = useToast();
   const [showModal, setShowModal] = useState(false);
+  const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ title: '', text: '', date: new Date().toLocaleDateString('en-IN') });
 
   const handleSave = () => {
@@ -1265,10 +1266,27 @@ function NotificationsSection() {
       toast.addToast('Message is required!', 'danger');
       return;
     }
-    addNotification(form);
-    toast.addToast('Notice posted successfully!', 'success');
+    if (editId) {
+      updateNotification(editId, form);
+      toast.addToast('Notice updated successfully!', 'success');
+    } else {
+      addNotification(form);
+      toast.addToast('Notice posted successfully!', 'success');
+    }
     setShowModal(false);
     setForm({ title: '', text: '', date: new Date().toLocaleDateString('en-IN') });
+    setEditId(null);
+  };
+
+  const handleEdit = (notif) => {
+    setForm({ title: notif.title, text: notif.text, date: notif.date });
+    setEditId(notif.id);
+    setShowModal(true);
+  };
+
+  const handleToggle = (notif) => {
+    updateNotification(notif.id, { active: !notif.active });
+    toast.addToast(notif.active ? 'Notice hidden from site' : 'Notice shown on site', 'info');
   };
 
   const handleDelete = (id) => {
@@ -1279,17 +1297,18 @@ function NotificationsSection() {
   };
 
   const activeNotifs = notifications.filter(n => n.active);
+  const inactiveNotifs = notifications.filter(n => !n.active);
 
   return (
     <div className="fade-in">
       <div className="admin-card">
         <div className="admin-card-header">
-          <h3>Notice Board ({activeNotifs.length})</h3>
-          <button className="btn-primary" onClick={() => setShowModal(true)}>+ Add Notice</button>
+          <h3>Notice Board ({activeNotifs.length} active)</h3>
+          <button className="btn-primary" onClick={() => { setEditId(null); setForm({ title: '', text: '', date: new Date().toLocaleDateString('en-IN') }); setShowModal(true); }}>+ Add Notice</button>
         </div>
 
         {activeNotifs.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>No notices yet. Add your first notice!</p>
+          <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>No active notices. Add your first notice!</p>
         ) : (
           <div className="notifications-list">
             {activeNotifs.map((notif, i) => (
@@ -1300,14 +1319,42 @@ function NotificationsSection() {
                   <p>{notif.text}</p>
                   <span className="notification-date-admin">{notif.date}</span>
                 </div>
-                <button onClick={() => handleDelete(notif.id)} className="btn-action btn-delete">Delete</button>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button onClick={() => handleToggle(notif)} className="btn-action btn-edit" style={{ fontSize: '11px', padding: '6px 10px' }}>Hide</button>
+                  <button onClick={() => handleEdit(notif)} className="btn-action btn-edit">Edit</button>
+                  <button onClick={() => handleDelete(notif.id)} className="btn-action btn-delete">Delete</button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Add New Notice">
+      {inactiveNotifs.length > 0 && (
+        <div className="admin-card" style={{ marginTop: '20px', opacity: 0.7 }}>
+          <div className="admin-card-header">
+            <h3>Hidden Notices ({inactiveNotifs.length})</h3>
+          </div>
+          <div className="notifications-list">
+            {inactiveNotifs.map((notif, i) => (
+              <div key={notif.id} className="notification-item">
+                <div className="notification-number" style={{ background: 'linear-gradient(135deg, #666, #888)' }}>{i + 1}</div>
+                <div className="notification-content-admin">
+                  <span className="notification-badge" style={{ background: 'linear-gradient(135deg, #666, #888)' }}>{notif.title}</span>
+                  <p>{notif.text}</p>
+                  <span className="notification-date-admin">{notif.date}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button onClick={() => handleToggle(notif)} className="btn-action btn-edit" style={{ fontSize: '11px', padding: '6px 10px', background: 'linear-gradient(135deg, #00B894, #00cec9)' }}>Show</button>
+                  <button onClick={() => handleDelete(notif.id)} className="btn-action btn-delete">Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditId(null); }} title={editId ? 'Edit Notice' : 'Add New Notice'}>
         <div className="modal-form">
           <div className="form-group">
             <label>Title *</label>
@@ -1337,8 +1384,8 @@ function NotificationsSection() {
             />
           </div>
           <div className="modal-actions">
-            <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-            <button className="btn-primary" onClick={handleSave}>Add Notice</button>
+            <button className="btn-secondary" onClick={() => { setShowModal(false); setEditId(null); }}>Cancel</button>
+            <button className="btn-primary" onClick={handleSave}>{editId ? 'Update Notice' : 'Add Notice'}</button>
           </div>
         </div>
       </Modal>
