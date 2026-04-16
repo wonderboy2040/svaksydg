@@ -132,6 +132,7 @@ export function DataProvider({ children }) {
   const syncTimeoutRef = useRef(null);
   const pollRef = useRef(null);
   const isSyncingRef = useRef(false);
+  const lastPushRef = useRef(0);
 
   const sheetUrl = data.settings?.sheetUrl;
 
@@ -175,7 +176,14 @@ export function DataProvider({ children }) {
     isSyncingRef.current = true;
 
     try {
-      const syncVersion = Date.now();
+      const now = Date.now();
+      if (now - lastPushRef.current < 2000) {
+        isSyncingRef.current = false;
+        return false;
+      }
+      lastPushRef.current = now;
+
+      const syncVersion = now;
       const dataWithMeta = {
         ...dataToPush,
         _syncVersion: syncVersion,
@@ -191,7 +199,6 @@ export function DataProvider({ children }) {
         body: JSON.stringify(dataWithMeta)
       });
 
-      // Update local version after successful push
       setData(prev => ({ ...prev, _syncVersion: syncVersion }));
 
       setSyncStatus('synced');
@@ -257,6 +264,18 @@ export function DataProvider({ children }) {
       loadFromCloud();
     }
   }, [sheetUrl, initialLoadDone, loadFromCloud]);
+
+  useEffect(() => {
+    if (!sheetUrl || !data.settings?.pin) return;
+    
+    const timer = setTimeout(() => {
+      if (!initialLoadDone) {
+        loadFromCloud();
+      }
+    }, 1500);
+    
+    return () => clearTimeout(timer);
+  }, [sheetUrl, data.settings?.pin, initialLoadDone]);
 
   useEffect(() => {
     const timer = setTimeout(() => saveToStorage(data), 100);
