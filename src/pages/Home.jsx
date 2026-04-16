@@ -7,7 +7,34 @@ import '../styles/Home.css';
 function AnimatedNumber({ value, duration = 1500 }) {
   const [count, setCount] = useState(0);
 
-useEffect(() => {
+  useEffect(() => {
+    let start = 0;
+    const end = value;
+    const incrementTime = duration / Math.max(end, 1);
+    const timer = setInterval(() => {
+      start++;
+      setCount(start);
+      if (start >= end) clearInterval(timer);
+    }, incrementTime > 0 ? incrementTime : 10);
+    return () => clearInterval(timer);
+  }, [value, duration]);
+
+  return <span>{count.toLocaleString('en-IN')}</span>;
+}
+
+function Home() {
+  const { members, collections, expenditure, committee, settings, notifications } = useData();
+  const [visibleSections, setVisibleSections] = useState({});
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const activeNotifs = notifications.filter(n => n.active);
+
+  const totalCollections = collections.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+  const totalExpenditure = expenditure.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const balance = totalCollections - totalExpenditure;
+
+  useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
       const sections = ['home', 'stats', 'about', 'committee', 'notifications', 'info'];
@@ -26,15 +53,6 @@ useEffect(() => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    if (activeNotifs.length > 0) {
-      const interval = setInterval(() => {
-        setActiveNotification(prev => (prev + 1) % activeNotifs.length);
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [activeNotifs.length]);
-
   const getInitials = (name) => {
     if (!name) return '?';
     return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
@@ -42,7 +60,6 @@ useEffect(() => {
 
   return (
     <div style={{ background: 'var(--bg)' }}>
-      {/* Navigation */}
       <nav className={`home-nav ${scrolled ? 'scrolled' : ''}`}>
         <div className="home-nav-inner">
           <Link to="/" className="home-nav-logo">
@@ -62,7 +79,6 @@ useEffect(() => {
         </div>
       </nav>
 
-      {/* Hero Section - Premium Design */}
       <section className="hero-section" id="home">
         <div className="hero-bg-image"></div>
         <div className="hero-bg-overlay"></div>
@@ -105,7 +121,6 @@ useEffect(() => {
         </div>
       </section>
 
-      {/* Stats Section */}
       <section className={`stats-section ${visibleSections.stats ? 'visible' : ''}`} id="stats">
         <div className="section-header-center">
           <span className="ancient-label">SAMAJ STATISTICS</span>
@@ -139,7 +154,6 @@ useEffect(() => {
         </div>
       </section>
 
-      {/* Notification Board */}
       <section className={`notifications-section ${visibleSections.notifications ? 'visible' : ''}`} id="notifications">
         <div className="notification-board">
           <div className="notification-header">
@@ -164,7 +178,6 @@ useEffect(() => {
         </div>
       </section>
 
-      {/* About Section */}
       <section className={`about-section ${visibleSections.about ? 'visible' : ''}`} id="about">
         <div className="section-header">
           <span className="ancient-label" style={{ color: 'var(--saffron)' }}>ABOUT US</span>
@@ -211,7 +224,6 @@ useEffect(() => {
         </div>
       </section>
 
-      {/* Committee Section */}
       <section className={`committee-section ${visibleSections.committee ? 'visible' : ''}`} id="committee">
         <div className="section-header">
           <span className="ancient-label">OUR TEAM</span>
@@ -234,7 +246,7 @@ useEffect(() => {
                     loading="lazy"
                     onError={(e) => {
                       console.warn('[SVAKS] Image failed:', member.photo, '→', imgSrc);
-                      e.target.onerror = null; // prevent infinite loop
+                      e.target.onerror = null;
                       e.target.src = PLACEHOLDER_IMAGE;
                     }}
                   />
@@ -261,7 +273,6 @@ useEffect(() => {
         </div>
       </section>
 
-      {/* Samaj Info Section */}
       <section className={`info-section ${visibleSections.info ? 'visible' : ''}`} id="info">
         <div className="info-section-bg"></div>
         <div className="info-container">
@@ -288,7 +299,6 @@ useEffect(() => {
         </div>
       </section>
 
-      {/* Footer */}
       <footer className="home-footer">
         <div className="footer-om">ॐ</div>
         <p>© 2026 {settings.appName || 'Soma Vamshi Aarya Kshthriya Samaj'}, {settings.location || 'Yadgir'} | <Link to="/admin-login">Admin Panel</Link></p>
