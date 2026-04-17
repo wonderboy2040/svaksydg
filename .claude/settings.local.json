@@ -13,7 +13,10 @@
       "Bash(npm run:*)",
       "Bash(curl -s http://localhost:5177)",
       "Bash(curl -s http://localhost:5177/src/pages/Admin.jsx)",
-      "Bash(curl -s http://localhost:5177/src/styles/Admin.css)"
+      "Bash(curl -s http://localhost:5177/src/styles/Admin.css)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

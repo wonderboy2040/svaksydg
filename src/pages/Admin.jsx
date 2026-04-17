@@ -38,7 +38,7 @@ function getMonthPaymentStatus(members, collections, month, year) {
 // ===== DASHBOARD SECTION =====
 function DashboardSection() {
   const { members, collections, expenditure, settings, setData } = useData();
-  const { addToast: toast } = useToast();
+  const { addToast } = useToast();
 
   const safeParseDate = (dateStr) => {
     if (!dateStr) return new Date(0);
@@ -58,7 +58,7 @@ function DashboardSection() {
 
   const markAllPaid = () => {
     if (unpaidCount === 0) {
-      toast.addToast('All members already paid!', 'info');
+      addToast('All members already paid!', 'info');
       return;
     }
     if (window.confirm(`Mark all ${unpaidCount} pending members as paid for ${MONTHS[currentMonth]}?`)) {
@@ -77,7 +77,7 @@ function DashboardSection() {
         }
       });
       setData(prev => ({ ...prev, collections: newCollections }));
-      toast.addToast('All members marked as paid!', 'success');
+      addToast('All members marked as paid!', 'success');
     }
   };
 
@@ -233,7 +233,7 @@ function DashboardSection() {
 // ===== MEMBERS SECTION =====
 function MembersSection() {
   const { members, addMember, updateMember, deleteMember, settings } = useData();
-  const { addToast: toast } = useToast();
+  const { addToast } = useToast();
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -272,15 +272,15 @@ function MembersSection() {
 
   const handleSave = () => {
     if (!form.name.trim()) {
-      toast.addToast('Name is required!', 'danger');
+      addToast('Name is required!', 'danger');
       return;
     }
     if (editId) {
       updateMember(editId, form);
-      toast.addToast('Member updated successfully!', 'success');
+      addToast('Member updated successfully!', 'success');
     } else {
       addMember(form);
-      toast.addToast('Member added successfully!', 'success');
+      addToast('Member added successfully!', 'success');
     }
     setShowModal(false);
     resetForm();
@@ -289,7 +289,7 @@ function MembersSection() {
   const handleDelete = (id) => {
     if (window.confirm('Are you sure? This member will be deleted!')) {
       deleteMember(id);
-      toast.addToast('Member deleted', 'info');
+      addToast('Member deleted', 'info');
     }
   };
 
@@ -376,7 +376,7 @@ function MembersSection() {
 // ===== COLLECTIONS SECTION =====
 function CollectionsSection() {
   const { collections, members, addCollection, deleteCollection } = useData();
-  const { addToast: toast } = useToast();
+  const { addToast } = useToast();
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
   const [filterYear, setFilterYear] = useState(new Date().getFullYear());
   const [showModal, setShowModal] = useState(false);
@@ -397,15 +397,15 @@ function CollectionsSection() {
 
   const handleSave = () => {
     if (!form.memberId && !form.memberName) {
-      toast.addToast('Please select a member or enter name!', 'danger');
+      addToast('Please select a member or enter name!', 'danger');
       return;
     }
     if (!form.amount || Number(form.amount) <= 0) {
-      toast.addToast('Please enter amount!', 'danger');
+      addToast('Please enter amount!', 'danger');
       return;
     }
     addCollection(form);
-    toast.addToast('Payment recorded successfully!', 'success');
+    addToast('Payment recorded successfully!', 'success');
     setShowModal(false);
     setForm({ memberId: '', memberName: '', amount: '', source: 'Monthly Collection', note: '', date: new Date().toISOString().split('T')[0] });
   };
@@ -413,7 +413,7 @@ function CollectionsSection() {
   const handleDelete = (id) => {
     if (window.confirm('Delete this collection?')) {
       deleteCollection(id);
-      toast.addToast('Payment deleted', 'info');
+      addToast('Payment deleted', 'info');
     }
   };
 
@@ -546,7 +546,7 @@ function CollectionsSection() {
 // ===== EXPENDITURE SECTION =====
 function ExpenditureSection() {
   const { expenditure, addExpenditure, updateExpenditure, deleteExpenditure } = useData();
-  const { addToast: toast } = useToast();
+  const { addToast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ category: '', amount: '', description: '', date: new Date().toISOString().split('T')[0] });
@@ -576,15 +576,15 @@ function ExpenditureSection() {
 
   const handleSave = () => {
     if (!form.amount || Number(form.amount) <= 0) {
-      toast.addToast('Please enter amount!', 'danger');
+      addToast('Please enter amount!', 'danger');
       return;
     }
     if (editId) {
       updateExpenditure(editId, form);
-      toast.addToast('Expense updated', 'success');
+      addToast('Expense updated', 'success');
     } else {
       addExpenditure(form);
-      toast.addToast('Expense recorded', 'success');
+      addToast('Expense recorded', 'success');
     }
     setShowModal(false);
     resetForm();
@@ -593,7 +593,7 @@ function ExpenditureSection() {
   const handleDelete = (id) => {
     if (window.confirm('Delete this expense?')) {
       deleteExpenditure(id);
-      toast.addToast('Expense deleted', 'info');
+      addToast('Expense deleted', 'info');
     }
   };
 
@@ -956,7 +956,7 @@ function CommitteeSection() {
 // ===== SETTINGS SECTION =====
 function SettingsSection() {
   const { settings, updateSetting, syncToGoogleSheet, loadFromGoogleSheet, exportJSON, importJSON, syncStatus, syncError, syncLastTime } = useData();
-  const { addToast: toast } = useToast();
+  const { addToast } = useToast();
   const [form, setForm] = useState({
     appName: settings.appName,
     location: settings.location,
@@ -972,32 +972,32 @@ function SettingsSection() {
     if (form.location) updateSetting('location', form.location);
     updateSetting('monthlyFee', Number(form.monthlyFee) || 100);
     updateSetting('sheetUrl', form.sheetUrl);
-    toast.addToast('Settings saved successfully!', 'success');
+    addToast('Settings saved successfully!', 'success');
   };
 
   const handlePinChange = () => {
     if (form.pin !== settings.pin) {
-      toast.addToast('Current PIN is wrong!', 'danger');
+      addToast('Current PIN is wrong!', 'danger');
       return;
     }
     if (form.newPin.length !== 4) {
-      toast.addToast('New PIN must be 4 digits!', 'danger');
+      addToast('New PIN must be 4 digits!', 'danger');
       return;
     }
     if (form.newPin !== form.confirmPin) {
-      toast.addToast('New PIN and Confirm PIN do not match!', 'danger');
+      addToast('New PIN and Confirm PIN do not match!', 'danger');
       return;
     }
     updateSetting('pin', form.newPin);
     setForm(prev => ({ ...prev, pin: '', newPin: '', confirmPin: '' }));
-    toast.addToast('PIN changed successfully!', 'success');
+    addToast('PIN changed successfully!', 'success');
   };
 
   const handleImportFile = (e) => {
     const file = e.target.files[0];
     if (file) {
       importJSON(file);
-      toast.addToast('Data import successful!', 'success');
+      addToast('Data import successful!', 'success');
     }
   };
 
@@ -1282,26 +1282,26 @@ function doGet(e) {
 // ===== NOTIFICATIONS SECTION =====
 function NotificationsSection() {
   const { notifications, addNotification, updateNotification, deleteNotification } = useData();
-  const { addToast: toast } = useToast();
+  const { addToast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ title: '', text: '', date: new Date().toLocaleDateString('en-IN') });
 
   const handleSave = () => {
     if (!form.title.trim()) {
-      toast.addToast('Title is required!', 'danger');
+      addToast('Title is required!', 'danger');
       return;
     }
     if (!form.text.trim()) {
-      toast.addToast('Message is required!', 'danger');
+      addToast('Message is required!', 'danger');
       return;
     }
     if (editId) {
       updateNotification(editId, form);
-      toast.addToast('Notice updated successfully!', 'success');
+      addToast('Notice updated successfully!', 'success');
     } else {
       addNotification(form);
-      toast.addToast('Notice posted successfully!', 'success');
+      addToast('Notice posted successfully!', 'success');
     }
     setShowModal(false);
     setForm({ title: '', text: '', date: new Date().toLocaleDateString('en-IN') });
@@ -1316,13 +1316,13 @@ function NotificationsSection() {
 
   const handleToggle = (notif) => {
     updateNotification(notif.id, { active: !notif.active });
-    toast.addToast(notif.active ? 'Notice hidden from site' : 'Notice shown on site', 'info');
+    addToast(notif.active ? 'Notice hidden from site' : 'Notice shown on site', 'info');
   };
 
   const handleDelete = (id) => {
     if (window.confirm('Delete this notification?')) {
       deleteNotification(id);
-      toast.addToast('Notice deleted', 'info');
+      addToast('Notice deleted', 'info');
     }
   };
 

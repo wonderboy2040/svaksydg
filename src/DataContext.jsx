@@ -127,19 +127,25 @@ export function DataProvider({ children }) {
   const [syncStatus, setSyncStatus] = useState('idle');
   const [syncError, setSyncError] = useState('');
   const [syncLastTime, setSyncLastTime] = useState(null);
-  const [cloudData, setCloudData] = useState(null);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const syncTimeoutRef = useRef(null);
   const pollRef = useRef(null);
   const isSyncingRef = useRef(false);
   const lastPushRef = useRef(0);
+  // Track whether a push is pending to avoid infinite loops
+  const skipNextPushRef = useRef(false);
 
   const sheetUrl = data.settings?.sheetUrl;
 
   const getLoadUrl = (url) => {
     if (!url) return '';
-    if (url.includes('/load')) return url;
-    return url.replace(/\/exec.*/, '/exec') + '/load';
+    // For Apps Script URLs, add query params for doGet
+    if (url.includes('script.google.com/macros')) {
+      const base = url.replace(/\/exec.*/, '/exec');
+      return base + '?action=load&load=true';
+    }
+    if (url.endsWith('/load')) return url;
+    return url + '/load';
   };
 
   const fetchCloudData = useCallback(async (showStatus = false) => {
@@ -192,13 +198,21 @@ export function DataProvider({ children }) {
 
       console.log('[SVAKS] Pushing to cloud, version:', syncVersion);
 
-      await fetch(sheetUrl, {
+      // Normalize the URL for POST
+      let postUrl = sheetUrl;
+      if (postUrl.includes('script.google.com/macros')) {
+        postUrl = postUrl.replace(/\/exec.*/, '/exec');
+      }
+
+      await fetch(postUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(dataWithMeta)
       });
 
+      // Update version without triggering another push
+      skipNextPushRef.current = true;
       setData(prev => ({ ...prev, _syncVersion: syncVersion }));
 
       setSyncStatus('synced');
@@ -215,8 +229,7 @@ export function DataProvider({ children }) {
     }
   }, [sheetUrl]);
 
-  const loadFromCloud = useCallback(async () => {
-    const cloud = await fetchCloudData(true);
+  const applyCloudData = useCallback((cloud) => {
     if (!cloud) return;
 
     const hasContent =
@@ -226,11 +239,35 @@ export function DataProvider({ children }) {
       cloud.settings?.pin;
 
     if (!hasContent) {
-      setSyncStatus('idle');
       return;
     }
 
-    // Check _syncVersion at root level, not in settings
+    const cloudVersion = Number(cloud._syncVersion) || 0;
+
+    console.log('[SVAKS] Applying cloud data, version:', cloudVersion);
+
+    // Skip the next push since this data came from cloud
+    skipNextPushRef.current = true;
+
+    setData({
+      _syncVersion: cloudVersion,
+      members: Array.isArray(cloud.members) ? cloud.members : [],
+      collections: Array.isArray(cloud.collections) ? cloud.collections : [],
+      expenditure: Array.isArray(cloud.expenditure) ? cloud.expenditure : [],
+      committee: Array.isArray(cloud.committee)
+        ? cloud.committee.map(c => ({ ...defaultCommittee.find(dc => dc.position === c.position), ...c }))
+        : defaultCommittee.map(c => ({ ...c })),
+      notifications: Array.isArray(cloud.notifications)
+        ? cloud.notifications
+        : defaultNotifications.map(n => ({ ...n })),
+      settings: { ...defaultSettings, ...(cloud.settings || {}), sheetUrl }
+    });
+  }, [sheetUrl]);
+
+  const loadFromCloud = useCallback(async () => {
+    const cloud = await fetchCloudData(true);
+    if (!cloud) return;
+
     const localVersion = data._syncVersion || 0;
     const cloudVersion = Number(cloud._syncVersion) || 0;
 
@@ -238,26 +275,15 @@ export function DataProvider({ children }) {
 
     if (cloudVersion > localVersion || !initialLoadDone) {
       console.log('[SVAKS] Updating from cloud...');
-      setData({
-        _syncVersion: cloudVersion,
-        members: Array.isArray(cloud.members) ? cloud.members : [],
-        collections: Array.isArray(cloud.collections) ? cloud.collections : [],
-        expenditure: Array.isArray(cloud.expenditure) ? cloud.expenditure : [],
-        committee: Array.isArray(cloud.committee)
-          ? cloud.committee.map(c => ({ ...defaultCommittee.find(dc => dc.position === c.position), ...c }))
-          : defaultCommittee.map(c => ({ ...c })),
-        notifications: Array.isArray(cloud.notifications)
-          ? cloud.notifications
-          : defaultNotifications.map(n => ({ ...n })),
-        settings: { ...defaultSettings, ...(cloud.settings || {}), sheetUrl }
-      });
+      applyCloudData(cloud);
       setInitialLoadDone(true);
     }
 
     setSyncStatus('synced');
     setSyncLastTime(new Date());
-  }, [fetchCloudData, data._syncVersion, initialLoadDone, sheetUrl]);
+  }, [fetchCloudData, data._syncVersion, initialLoadDone, applyCloudData]);
 
+  // Initial cloud load
   useEffect(() => {
     if (sheetUrl && !initialLoadDone) {
       console.log('[SVAKS] Initial cloud load...');
@@ -265,6 +291,7 @@ export function DataProvider({ children }) {
     }
   }, [sheetUrl, initialLoadDone, loadFromCloud]);
 
+  // Fallback load after 1.5s if initial load hasn't completed
   useEffect(() => {
     if (!sheetUrl || !data.settings?.pin) return;
     
@@ -277,13 +304,22 @@ export function DataProvider({ children }) {
     return () => clearTimeout(timer);
   }, [sheetUrl, data.settings?.pin, initialLoadDone]);
 
+  // Save to localStorage on data change
   useEffect(() => {
     const timer = setTimeout(() => saveToStorage(data), 100);
     return () => clearTimeout(timer);
   }, [data]);
 
+  // Push to cloud on data change (debounced), but skip if data came from cloud
   useEffect(() => {
     if (!sheetUrl) return;
+
+    // Skip push if this data change came from cloud
+    if (skipNextPushRef.current) {
+      skipNextPushRef.current = false;
+      return;
+    }
+
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
     setSyncStatus('syncing');
@@ -294,6 +330,7 @@ export function DataProvider({ children }) {
     return () => clearTimeout(syncTimeoutRef.current);
   }, [data, sheetUrl, pushToCloud]);
 
+  // Poll for cloud changes every 10s
   useEffect(() => {
     if (!sheetUrl) return;
 
@@ -306,36 +343,22 @@ export function DataProvider({ children }) {
 
       if (cloudVersion > localVersion) {
         console.log('[SVAKS] Poll: New data detected, updating...');
-
-        setData({
-          _syncVersion: cloudVersion,
-          members: Array.isArray(cloud.members) ? cloud.members : [],
-          collections: Array.isArray(cloud.collections) ? cloud.collections : [],
-          expenditure: Array.isArray(cloud.expenditure) ? cloud.expenditure : [],
-          committee: Array.isArray(cloud.committee)
-            ? cloud.committee.map(c => ({ ...defaultCommittee.find(dc => dc.position === c.position), ...c }))
-            : defaultCommittee.map(c => ({ ...c })),
-          notifications: Array.isArray(cloud.notifications)
-            ? cloud.notifications
-            : defaultNotifications.map(n => ({ ...n })),
-          settings: { ...defaultSettings, ...(cloud.settings || {}), sheetUrl }
-        });
-
+        applyCloudData(cloud);
         setSyncStatus('synced');
         setSyncLastTime(new Date());
       }
     };
 
     pollRef.current = setInterval(poll, 10000);
-
     const quickCheck = setTimeout(poll, 3000);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       clearTimeout(quickCheck);
     };
-  }, [sheetUrl, fetchCloudData, data.settings?._syncVersion]);
+  }, [sheetUrl, fetchCloudData, data._syncVersion, applyCloudData]);
 
+  // Sync on tab visibility change
   useEffect(() => {
     if (!sheetUrl) return;
 
@@ -350,6 +373,7 @@ export function DataProvider({ children }) {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [sheetUrl, loadFromCloud]);
 
+  // Sync on window focus
   useEffect(() => {
     if (!sheetUrl) return;
 
@@ -492,6 +516,7 @@ export function DataProvider({ children }) {
       try {
         const imp = JSON.parse(e.target.result);
         setData({
+          _syncVersion: imp._syncVersion || 0,
           members: imp.members || [],
           collections: imp.collections || [],
           expenditure: imp.expenditure || [],
