@@ -971,26 +971,7 @@ function SettingsSection() {
     if (form.appName) updateSetting('appName', form.appName);
     if (form.location) updateSetting('location', form.location);
     updateSetting('monthlyFee', Number(form.monthlyFee) || 100);
-    updateSetting('sheetUrl', form.sheetUrl);
     addToast('Settings saved successfully!', 'success');
-  };
-
-  const handlePinChange = () => {
-    if (form.pin !== settings.pin) {
-      addToast('Current PIN is wrong!', 'danger');
-      return;
-    }
-    if (form.newPin.length !== 4) {
-      addToast('New PIN must be 4 digits!', 'danger');
-      return;
-    }
-    if (form.newPin !== form.confirmPin) {
-      addToast('New PIN and Confirm PIN do not match!', 'danger');
-      return;
-    }
-    updateSetting('pin', form.newPin);
-    setForm(prev => ({ ...prev, pin: '', newPin: '', confirmPin: '' }));
-    addToast('PIN changed successfully!', 'success');
   };
 
   const handleImportFile = (e) => {
@@ -1015,10 +996,11 @@ function SettingsSection() {
     var rows = data[dataKeys[i]];
     if (rows && rows.length > 0) {
       var headers = Object.keys(rows[0]);
-      sheet.appendRow(headers);
+      var sheetValues = [headers];
       rows.forEach(function(item) {
-        sheet.appendRow(headers.map(function(h) { return item[h] !== undefined ? item[h] : ''; }));
+        sheetValues.push(headers.map(function(h) { return item[h] !== undefined ? item[h] : ''; }));
       });
+      sheet.getRange(1, 1, sheetValues.length, headers.length).setValues(sheetValues);
     }
   }
 
@@ -1119,58 +1101,9 @@ function doGet(e) {
                 placeholder="100"
               />
             </div>
-            <div className="settings-field">
-              <label>Google Apps Script Web App URL *</label>
-              <input
-                value={form.sheetUrl}
-                onChange={e => setForm(prev => ({ ...prev, sheetUrl: e.target.value }))}
-                placeholder="https://script.google.com/macros/s/.../exec"
-              />
-              <small style={{ color: '#888', fontSize: '11px' }}>Paste the Web App URL (not spreadsheet URL)</small>
-            </div>
           </div>
           <div className="settings-actions">
             <button className="btn-primary" onClick={handleSaveSettings}>Save Settings</button>
-          </div>
-        </div>
-      </div>
-
-      {/* PIN Change */}
-      <div className="admin-card">
-        <div className="settings-section">
-          <h4>Change PIN</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '400px' }}>
-            <div className="settings-field">
-              <label>Current PIN</label>
-              <input
-                type="password"
-                value={form.pin}
-                onChange={e => setForm(prev => ({ ...prev, pin: e.target.value }))}
-                placeholder="4-digit PIN"
-                maxLength="4"
-              />
-            </div>
-            <div className="settings-field">
-              <label>New PIN</label>
-              <input
-                type="password"
-                value={form.newPin}
-                onChange={e => setForm(prev => ({ ...prev, newPin: e.target.value }))}
-                placeholder="New 4-digit PIN"
-                maxLength="4"
-              />
-            </div>
-            <div className="settings-field">
-              <label>Confirm New PIN</label>
-              <input
-                type="password"
-                value={form.confirmPin}
-                onChange={e => setForm(prev => ({ ...prev, confirmPin: e.target.value }))}
-                placeholder="Confirm PIN"
-                maxLength="4"
-              />
-            </div>
-            <button className="btn-primary" onClick={handlePinChange}>Change PIN</button>
           </div>
         </div>
       </div>
@@ -1493,22 +1426,20 @@ function Admin() {
         </nav>
         <div className="admin-sidebar-footer">
           {/* Cloud Sync Status Indicator */}
-          {settings?.sheetUrl && (
-            <>
-              <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)' }}>
-                <span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : '☁️'}</span>
-                <span style={{ color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' ? '#E17055' : 'rgba(255,255,255,0.5)' }}>
-                  {syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Cloud synced' : syncStatus === 'error' ? 'Sync failed' : 'Cloud connected'}
-                </span>
-              </div>
-              <button
-                onClick={loadFromGoogleSheet}
-                style={{ marginBottom: '12px', padding: '6px 10px', fontSize: '11px', background: 'rgba(0,184,148,0.2)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '6px', color: '#00B894', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-              >
-                🔄 Refresh from Cloud
-              </button>
-            </>
-          )}
+          <>
+            <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)' }}>
+              <span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : '☁️'}</span>
+              <span style={{ color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' ? '#E17055' : 'rgba(255,255,255,0.5)' }}>
+                {syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Cloud synced' : syncStatus === 'error' ? 'Sync failed' : 'Cloud connected'}
+              </span>
+            </div>
+            <button
+              onClick={loadFromGoogleSheet}
+              style={{ marginBottom: '12px', padding: '6px 10px', fontSize: '11px', background: 'rgba(0,184,148,0.2)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '6px', color: '#00B894', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+            >
+              🔄 Refresh from Cloud
+            </button>
+          </>
           <button onClick={handleLogout}>
             <span>🔒</span> Logout →
           </button>

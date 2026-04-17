@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { CLOUD_URL } from './config';
 
 const DataContext = createContext(null);
 
@@ -135,8 +136,6 @@ export function DataProvider({ children }) {
   // Track whether a push is pending to avoid infinite loops
   const skipNextPushRef = useRef(false);
 
-  const sheetUrl = data.settings?.sheetUrl;
-
   const getLoadUrl = (url) => {
     if (!url) return '';
     // For Apps Script URLs, add query params for doGet
@@ -149,11 +148,11 @@ export function DataProvider({ children }) {
   };
 
   const fetchCloudData = useCallback(async (showStatus = false) => {
-    if (!sheetUrl) return null;
+    if (!CLOUD_URL) return null;
     if (showStatus) setSyncStatus('loading');
 
     try {
-      const loadUrl = getLoadUrl(sheetUrl);
+      const loadUrl = getLoadUrl(CLOUD_URL);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 12000);
 
@@ -175,15 +174,16 @@ export function DataProvider({ children }) {
       }
       return null;
     }
-  }, [sheetUrl]);
+  }, []);
 
   const pushToCloud = useCallback(async (dataToPush) => {
-    if (!sheetUrl || isSyncingRef.current) return false;
+    if (!CLOUD_URL || isSyncingRef.current) return false;
     isSyncingRef.current = true;
 
     try {
       const now = Date.now();
-      if (now - lastPushRef.current < 2000) {
+      // Allow faster pushes (1s min) instead of 2s for superfast sync
+      if (now - lastPushRef.current < 1000) {
         isSyncingRef.current = false;
         return false;
       }
@@ -199,7 +199,7 @@ export function DataProvider({ children }) {
       console.log('[SVAKS] Pushing to cloud, version:', syncVersion);
 
       // Normalize the URL for POST
-      let postUrl = sheetUrl;
+      let postUrl = CLOUD_URL;
       if (postUrl.includes('script.google.com/macros')) {
         postUrl = postUrl.replace(/\/exec.*/, '/exec');
       }
@@ -227,7 +227,7 @@ export function DataProvider({ children }) {
     } finally {
       isSyncingRef.current = false;
     }
-  }, [sheetUrl]);
+  }, []);
 
   const applyCloudData = useCallback((cloud) => {
     if (!cloud) return;
@@ -254,15 +254,15 @@ export function DataProvider({ children }) {
       members: Array.isArray(cloud.members) ? cloud.members : [],
       collections: Array.isArray(cloud.collections) ? cloud.collections : [],
       expenditure: Array.isArray(cloud.expenditure) ? cloud.expenditure : [],
-      committee: Array.isArray(cloud.committee)
-        ? cloud.committee.map(c => ({ ...defaultCommittee.find(dc => dc.position === c.position), ...c }))
+      committee: Array.isArray(cloud.committee) && cloud.committee.length > 0
+        ? cloud.committee.map(c => ({ ...(defaultCommittee.find(dc => dc.position === c.position) || {}), ...c }))
         : defaultCommittee.map(c => ({ ...c })),
-      notifications: Array.isArray(cloud.notifications)
+      notifications: Array.isArray(cloud.notifications) && cloud.notifications.length > 0
         ? cloud.notifications
         : defaultNotifications.map(n => ({ ...n })),
-      settings: { ...defaultSettings, ...(cloud.settings || {}), sheetUrl }
+      settings: { ...defaultSettings, ...(Array.isArray(cloud.settings) ? {} : (cloud.settings || {})) }
     });
-  }, [sheetUrl]);
+  }, []);
 
   const loadFromCloud = useCallback(async () => {
     const cloud = await fetchCloudData(true);
@@ -285,16 +285,14 @@ export function DataProvider({ children }) {
 
   // Initial cloud load
   useEffect(() => {
-    if (sheetUrl && !initialLoadDone) {
+    if (!initialLoadDone) {
       console.log('[SVAKS] Initial cloud load...');
       loadFromCloud();
     }
-  }, [sheetUrl, initialLoadDone, loadFromCloud]);
+  }, [initialLoadDone, loadFromCloud]);
 
   // Fallback load after 1.5s if initial load hasn't completed
   useEffect(() => {
-    if (!sheetUrl || !data.settings?.pin) return;
-    
     const timer = setTimeout(() => {
       if (!initialLoadDone) {
         loadFromCloud();
@@ -302,7 +300,7 @@ export function DataProvider({ children }) {
     }, 1500);
     
     return () => clearTimeout(timer);
-  }, [sheetUrl, data.settings?.pin, initialLoadDone]);
+  }, [initialLoadDone]);
 
   // Save to localStorage on data change
   useEffect(() => {
@@ -310,9 +308,9 @@ export function DataProvider({ children }) {
     return () => clearTimeout(timer);
   }, [data]);
 
-  // Push to cloud on data change (debounced), but skip if data came from cloud
+  // Push to cloud INSTANTLY on data change (superfast sync)
   useEffect(() => {
-    if (!sheetUrl) return;
+    if (!CLOUD_URL) return;
 
     // Skip push if this data change came from cloud
     if (skipNextPushRef.current) {
@@ -320,19 +318,15 @@ export function DataProvider({ children }) {
       return;
     }
 
-    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-
     setSyncStatus('syncing');
-    syncTimeoutRef.current = setTimeout(() => {
-      pushToCloud(data);
-    }, 2000);
-
-    return () => clearTimeout(syncTimeoutRef.current);
-  }, [data, sheetUrl, pushToCloud]);
+    
+    // Instead of waiting 2000ms, push immediately for superfast responsiveness
+    pushToCloud(data);
+  }, [data, pushToCloud]);
 
   // Poll for cloud changes every 10s
   useEffect(() => {
-    if (!sheetUrl) return;
+    if (!CLOUD_URL) return;
 
     const poll = async () => {
       const cloud = await fetchCloudData(false);
@@ -356,12 +350,10 @@ export function DataProvider({ children }) {
       if (pollRef.current) clearInterval(pollRef.current);
       clearTimeout(quickCheck);
     };
-  }, [sheetUrl, fetchCloudData, data._syncVersion, applyCloudData]);
+  }, [fetchCloudData, data._syncVersion, applyCloudData]);
 
   // Sync on tab visibility change
   useEffect(() => {
-    if (!sheetUrl) return;
-
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         console.log('[SVAKS] Tab visible, syncing...');
@@ -371,12 +363,10 @@ export function DataProvider({ children }) {
 
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [sheetUrl, loadFromCloud]);
+  }, [loadFromCloud]);
 
   // Sync on window focus
   useEffect(() => {
-    if (!sheetUrl) return;
-
     const handleFocus = () => {
       console.log('[SVAKS] Window focused...');
       loadFromCloud();
@@ -384,10 +374,10 @@ export function DataProvider({ children }) {
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [sheetUrl, loadFromCloud]);
+  }, [loadFromCloud]);
 
   const syncToGoogleSheet = useCallback(async () => {
-    if (!sheetUrl) {
+    if (!CLOUD_URL) {
       alert('Google Sheets URL nahi mila!');
       return;
     }
@@ -396,10 +386,10 @@ export function DataProvider({ children }) {
     if (success) {
       alert('Data Google Sheets mein save ho gaya!');
     }
-  }, [sheetUrl, pushToCloud, data]);
+  }, [pushToCloud, data]);
 
   const loadFromGoogleSheet = useCallback(async () => {
-    if (!sheetUrl) {
+    if (!CLOUD_URL) {
       alert('Google Sheets URL nahi mila!');
       return;
     }
@@ -408,7 +398,7 @@ export function DataProvider({ children }) {
     setSyncStatus('loading');
     await loadFromCloud();
     alert('Data load ho gaya!');
-  }, [sheetUrl, loadFromCloud]);
+  }, [loadFromCloud]);
 
   const update = useCallback((key, value) => {
     setData(prev => ({ ...prev, [key]: value }));
