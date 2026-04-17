@@ -217,7 +217,7 @@ export function DataProvider({ children }) {
         const response = await fetch(postUrl, {
           method: 'POST',
           mode: 'cors',
-          headers: { 'Content-Type': 'text/plain' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dataWithMeta)
         });
 
@@ -304,7 +304,7 @@ export function DataProvider({ children }) {
       const response = await fetch(postUrl, {
         method: 'POST',
         mode: 'cors',
-        headers: { 'Content-Type': 'text/plain' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataWithMeta)
       });
 
@@ -449,7 +449,16 @@ export function DataProvider({ children }) {
   useEffect(() => {
     if (!CLOUD_URL) return;
 
-    pushToCloud(data, true);
+    // Only auto-sync if there's actual data to sync
+    const hasData = data.members?.length > 0 ||
+                   data.collections?.length > 0 ||
+                   data.expenditure?.length > 0 ||
+                   data.committee?.some(c => c.name) ||
+                   data.notifications?.length > 0;
+
+    if (hasData) {
+      pushToCloud(data, true);
+    }
   }, [data, pushToCloud]);
 
   useEffect(() => {
