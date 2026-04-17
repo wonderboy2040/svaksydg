@@ -223,8 +223,10 @@ export function DataProvider({ children }) {
 
         if (response.ok || response.type === 'opaque') {
           successCount++;
+          console.log('[SVAKS] Queue item synced successfully');
         } else {
-          failedItems.push(item);
+          console.error('[SVAKS] Queue item failed:', response.status);
+          failedItems.push({ ...item, retryCount: (item.retryCount || 0) + 1 });
         }
       } catch (e) {
         console.error('[SVAKS] Queue push error:', e.message);
@@ -261,7 +263,6 @@ export function DataProvider({ children }) {
 
     const baseDelay = 2000;
     const maxDelay = 30000;
-    const maxRetries = 5;
 
     const avgRetryCount = queue.reduce((sum, item) => sum + (item.retryCount || 0), 0) / queue.length;
     const delay = Math.min(baseDelay * Math.pow(2, avgRetryCount), maxDelay);
@@ -294,6 +295,7 @@ export function DataProvider({ children }) {
     };
 
     console.log('[SVAKS] Pushing to cloud, version:', syncVersion);
+    setSyncStatus('syncing');
 
     try {
       let postUrl = CLOUD_URL;
@@ -308,20 +310,26 @@ export function DataProvider({ children }) {
         body: JSON.stringify(dataWithMeta)
       });
 
-      const nowISO = new Date().toISOString();
-      setLastSyncTime(nowISO);
-      setSyncLastTime(nowISO);
-      setSyncStatus('synced');
-      setSyncError('');
-      setInitialLoadDone(true);
+      // Check if request was successful
+      if (response.ok || response.type === 'opaque') {
+        console.log('[SVAKS] Push successful!');
+        const nowISO = new Date().toISOString();
+        setLastSyncTime(nowISO);
+        setSyncLastTime(nowISO);
+        setSyncStatus('synced');
+        setSyncError('');
+        setInitialLoadDone(true);
 
-      syncQueueRef.current = syncQueueRef.current.filter(
-        item => Math.abs(item.data._syncVersion - syncVersion) > 1000
-      );
-      saveSyncQueue(syncQueueRef.current);
-      setPendingCount(syncQueueRef.current.length);
+        syncQueueRef.current = syncQueueRef.current.filter(
+          item => Math.abs(item.data._syncVersion - syncVersion) > 1000
+        );
+        saveSyncQueue(syncQueueRef.current);
+        setPendingCount(syncQueueRef.current.length);
 
-      return true;
+        return true;
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
     } catch (e) {
       console.error('[SVAKS] Push error:', e.message);
       setSyncStatus('error');
@@ -446,21 +454,23 @@ export function DataProvider({ children }) {
     return () => clearTimeout(timer);
   }, [data]);
 
+  // Auto-sync: Push data to cloud whenever data changes
   useEffect(() => {
     if (!CLOUD_URL) return;
 
     // Only auto-sync if there's actual data to sync
     const hasData = data.members?.length > 0 ||
-                   data.collections?.length > 0 ||
-                   data.expenditure?.length > 0 ||
-                   data.committee?.some(c => c.name) ||
-                   data.notifications?.length > 0;
+      data.collections?.length > 0 ||
+      data.expenditure?.length > 0 ||
+      data.committee?.some(c => c.name) ||
+      data.notifications?.length > 0;
 
     if (hasData) {
       pushToCloud(data, true);
     }
   }, [data, pushToCloud]);
 
+  // Poll for changes from cloud
   useEffect(() => {
     if (!CLOUD_URL) return;
 
