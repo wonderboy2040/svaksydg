@@ -955,7 +955,7 @@ function CommitteeSection() {
 
 // ===== SETTINGS SECTION =====
 function SettingsSection() {
-  const { settings, updateSetting, syncToGoogleSheet, loadFromGoogleSheet, exportJSON, importJSON, syncStatus, syncError, syncLastTime } = useData();
+  const { settings, updateSetting, syncToGoogleSheet, loadFromGoogleSheet, exportJSON, importJSON, syncStatus, syncError, syncLastTime, pendingCount, clearSyncQueue } = useData();
   const { addToast } = useToast();
   const [form, setForm] = useState({
     appName: settings.appName,
@@ -1166,22 +1166,35 @@ function doGet(e) {
                   <div style={{ color: '#fff' }}>{syncLastTime ? syncLastTime.toLocaleTimeString() : 'Never'}</div>
                 </div>
               </div>
-              {/* Sync Status Display */}
-              <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '10px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' || syncStatus === 'loading' ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${syncStatus === 'syncing' ? 'rgba(253,203,110,0.4)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.4)' : syncStatus === 'error' || syncStatus === 'loading' ? 'rgba(225,112,85,0.4)' : 'rgba(255,255,255,0.1)'}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '600', color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' || syncStatus === 'loading' ? '#E17055' : '#aaa' }}>
-                  <span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : syncStatus === 'loading' ? '⏳' : '☁️'}</span>
-                  <span>
-                    {syncStatus === 'syncing' ? 'Syncing to cloud...' :
-                      syncStatus === 'synced' ? 'All devices in sync' :
-                        syncStatus === 'error' ? 'Sync failed!' :
-                          syncStatus === 'loading' ? 'Loading from cloud...' :
-                            'Cloud connected'}
-                  </span>
-                </div>
-                {syncError && <div style={{ marginTop: '6px', fontSize: '12px', color: '#E17055' }}>Error: {syncError}</div>}
-              </div>
-            </div>
-          )}
+{/* Sync Status Display */}
+<div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '10px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' || syncStatus === 'loading' ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${syncStatus === 'syncing' ? 'rgba(253,203,110,0.4)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.4)' : syncStatus === 'error' || syncStatus === 'loading' ? 'rgba(225,112,85,0.4)' : 'rgba(255,255,255,0.1)'}` }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '600', color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' || syncStatus === 'loading' ? '#E17055' : '#aaa' }}>
+<span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : syncStatus === 'loading' ? '⏳' : '☁️'}</span>
+<span>
+{syncStatus === 'syncing' ? 'Syncing to cloud...' :
+syncStatus === 'synced' ? 'All devices in sync' :
+syncStatus === 'error' ? 'Sync failed!' :
+syncStatus === 'loading' ? 'Loading from cloud...' :
+'Cloud connected'}
+</span>
+{pendingCount > 0 && (
+<span style={{ marginLeft: '8px', padding: '2px 8px', background: 'rgba(225,112,85,0.3)', borderRadius: '12px', fontSize: '12px' }}>
+{pendingCount} pending
+</span>
+)}
+</div>
+{syncError && <div style={{ marginTop: '6px', fontSize: '12px', color: '#E17055' }}>Error: {syncError}</div>}
+{pendingCount > 0 && (
+<button
+onClick={syncToGoogleSheet}
+style={{ marginTop: '8px', padding: '6px 12px', background: 'rgba(225,112,85,0.2)', border: '1px solid rgba(225,112,85,0.5)', borderRadius: '6px', color: '#E17055', fontSize: '12px', cursor: 'pointer' }}
+>
+Retry Sync Now
+</button>
+)}
+</div>
+</div>
+)}
         </div>
       </div>
 
@@ -1359,7 +1372,7 @@ function NotificationsSection() {
 // ===== MAIN ADMIN COMPONENT =====
 function Admin() {
   const navigate = useNavigate();
-  const { syncStatus, settings, loadFromGoogleSheet } = useData();
+  const { syncStatus, settings, loadFromGoogleSheet, pendingCount, syncToGoogleSheet } = useData();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -1427,12 +1440,20 @@ function Admin() {
         <div className="admin-sidebar-footer">
           {/* Cloud Sync Status Indicator */}
           <>
-            <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)' }}>
-              <span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : '☁️'}</span>
-              <span style={{ color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' ? '#E17055' : 'rgba(255,255,255,0.5)' }}>
-                {syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Cloud synced' : syncStatus === 'error' ? 'Sync failed' : 'Cloud connected'}
-              </span>
-            </div>
+<div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' || pendingCount > 0 ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)' }}>
+<span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' || pendingCount > 0 ? '❌' : '☁️'}</span>
+<span style={{ color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' || pendingCount > 0 ? '#E17055' : 'rgba(255,255,255,0.5)' }}>
+{syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Cloud synced' : syncStatus === 'error' ? 'Sync failed' : syncStatus === 'loading' ? 'Loading...' : pendingCount > 0 ? `${pendingCount} pending` : 'Cloud connected'}
+</span>
+</div>
+{pendingCount > 0 && (
+<button
+onClick={syncToGoogleSheet}
+style={{ marginBottom: '12px', padding: '6px 10px', fontSize: '11px', background: 'rgba(225,112,85,0.2)', border: '1px solid rgba(225,112,85,0.4)', borderRadius: '6px', color: '#E17055', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+>
+🔄 Retry Sync
+</button>
+)}
             <button
               onClick={loadFromGoogleSheet}
               style={{ marginBottom: '12px', padding: '6px 10px', fontSize: '11px', background: 'rgba(0,184,148,0.2)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '6px', color: '#00B894', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}

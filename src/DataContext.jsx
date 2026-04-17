@@ -30,6 +30,8 @@ const defaultCommittee = [
 ];
 
 const STORAGE_KEY = 'svaks_data';
+const SYNC_QUEUE_KEY = 'svaks_sync_queue';
+const LAST_SYNC_KEY = 'svaks_last_sync';
 
 function loadFromStorage() {
   try {
@@ -73,6 +75,42 @@ function saveToStorage(data) {
     }));
   } catch (e) {
     console.error('[SVAKS] save error:', e);
+  }
+}
+
+function loadSyncQueue() {
+  try {
+    const raw = localStorage.getItem(SYNC_QUEUE_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('[SVAKS] Sync queue load error:', e);
+  }
+  return [];
+}
+
+function saveSyncQueue(queue) {
+  try {
+    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+  } catch (e) {
+    console.error('[SVAKS] Sync queue save error:', e);
+  }
+}
+
+function getLastSyncTime() {
+  try {
+    return localStorage.getItem(LAST_SYNC_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setLastSyncTime(time) {
+  try {
+    localStorage.setItem(LAST_SYNC_KEY, time);
+  } catch (e) {
+    console.error('[SVAKS] Last sync time save error:', e);
   }
 }
 
@@ -127,18 +165,18 @@ export function DataProvider({ children }) {
   const [data, setData] = useState(loadFromStorage);
   const [syncStatus, setSyncStatus] = useState('idle');
   const [syncError, setSyncError] = useState('');
-  const [syncLastTime, setSyncLastTime] = useState(null);
+  const [syncLastTime, setSyncLastTime] = useState(getLastSyncTime());
   const [initialLoadDone, setInitialLoadDone] = useState(false);
-  const syncTimeoutRef = useRef(null);
-  const pollRef = useRef(null);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const syncQueueRef = useRef(loadSyncQueue());
   const isSyncingRef = useRef(false);
+  const retryTimeoutRef = useRef(null);
+  const pollRef = useRef(null);
   const lastPushRef = useRef(0);
-  // Track whether a push is pending to avoid infinite loops
-  const skipNextPushRef = useRef(false);
 
   const getLoadUrl = (url) => {
     if (!url) return '';
-    // For Apps Script URLs, add query params for doGet
     if (url.includes('script.google.com/macros')) {
       const base = url.replace(/\/exec.*/, '/exec');
       return base + '?action=load&load=true';
@@ -147,6 +185,164 @@ export function DataProvider({ children }) {
     return url + '/load';
   };
 
+  const processQueue = useCallback(async () => {
+    if (!CLOUD_URL || isSyncingRef.current || syncQueueRef.current.length === 0) {
+      return;
+    }
+
+    const queue = [...syncQueueRef.current];
+    if (queue.length === 0) return;
+
+    isSyncingRef.current = true;
+    setSyncStatus('syncing');
+
+    let successCount = 0;
+    let failedItems = [];
+
+    for (const item of queue) {
+      try {
+        const now = Date.now();
+        const dataWithMeta = {
+          ...item.data,
+          _syncVersion: now,
+          _lastSync: new Date().toISOString(),
+          _queueId: item.id
+        };
+
+        let postUrl = CLOUD_URL;
+        if (postUrl.includes('script.google.com/macros')) {
+          postUrl = postUrl.replace(/\/exec.*/, '/exec');
+        }
+
+        const response = await fetch(postUrl, {
+          method: 'POST',
+          mode: 'cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(dataWithMeta)
+        });
+
+        if (response.ok || response.type === 'opaque') {
+          successCount++;
+        } else {
+          failedItems.push(item);
+        }
+      } catch (e) {
+        console.error('[SVAKS] Queue push error:', e.message);
+        failedItems.push({ ...item, retryCount: (item.retryCount || 0) + 1 });
+      }
+    }
+
+    syncQueueRef.current = failedItems.filter(item => (item.retryCount || 0) < 5);
+    saveSyncQueue(syncQueueRef.current);
+    setPendingCount(syncQueueRef.current.length);
+
+    if (syncQueueRef.current.length === 0) {
+      setSyncStatus('synced');
+      setSyncError('');
+      const now = new Date().toISOString();
+      setLastSyncTime(now);
+      setSyncLastTime(now);
+    } else {
+      setSyncStatus('error');
+      setSyncError(`${syncQueueRef.current.length} pending syncs`);
+      scheduleRetry();
+    }
+
+    isSyncingRef.current = false;
+  }, []);
+
+  const scheduleRetry = useCallback(() => {
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+    }
+
+    const queue = syncQueueRef.current;
+    if (queue.length === 0) return;
+
+    const baseDelay = 2000;
+    const maxDelay = 30000;
+    const maxRetries = 5;
+
+    const avgRetryCount = queue.reduce((sum, item) => sum + (item.retryCount || 0), 0) / queue.length;
+    const delay = Math.min(baseDelay * Math.pow(2, avgRetryCount), maxDelay);
+
+    console.log(`[SVAKS] Scheduling retry in ${delay}ms (avg retries: ${avgRetryCount.toFixed(1)})`);
+
+    retryTimeoutRef.current = setTimeout(() => {
+      processQueue();
+    }, delay);
+  }, [processQueue]);
+
+  const pushToCloud = useCallback(async (dataToPush, priority = false) => {
+    if (!CLOUD_URL) {
+      console.warn('[SVAKS] No cloud URL configured');
+      return false;
+    }
+
+    const now = Date.now();
+
+    if (priority && now - lastPushRef.current < 500) {
+      return false;
+    }
+    lastPushRef.current = now;
+
+    const syncVersion = now;
+    const dataWithMeta = {
+      ...dataToPush,
+      _syncVersion: syncVersion,
+      _lastSync: new Date().toISOString()
+    };
+
+    console.log('[SVAKS] Pushing to cloud, version:', syncVersion);
+
+    try {
+      let postUrl = CLOUD_URL;
+      if (postUrl.includes('script.google.com/macros')) {
+        postUrl = postUrl.replace(/\/exec.*/, '/exec');
+      }
+
+      const response = await fetch(postUrl, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(dataWithMeta)
+      });
+
+      const nowISO = new Date().toISOString();
+      setLastSyncTime(nowISO);
+      setSyncLastTime(nowISO);
+      setSyncStatus('synced');
+      setSyncError('');
+      setInitialLoadDone(true);
+
+      syncQueueRef.current = syncQueueRef.current.filter(
+        item => Math.abs(item.data._syncVersion - syncVersion) > 1000
+      );
+      saveSyncQueue(syncQueueRef.current);
+      setPendingCount(syncQueueRef.current.length);
+
+      return true;
+    } catch (e) {
+      console.error('[SVAKS] Push error:', e.message);
+      setSyncStatus('error');
+      setSyncError(e.message);
+
+      const queueItem = {
+        id: Date.now(),
+        data: dataWithMeta,
+        retryCount: 0,
+        timestamp: now
+      };
+      syncQueueRef.current.push(queueItem);
+      saveSyncQueue(syncQueueRef.current);
+      setPendingCount(syncQueueRef.current.length);
+
+      scheduleRetry();
+
+      return false;
+    }
+  }, [scheduleRetry]);
+
   const fetchCloudData = useCallback(async (showStatus = false) => {
     if (!CLOUD_URL) return null;
     if (showStatus) setSyncStatus('loading');
@@ -154,7 +350,7 @@ export function DataProvider({ children }) {
     try {
       const loadUrl = getLoadUrl(CLOUD_URL);
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
+      const timeout = setTimeout(() => controller.abort(), 15000);
 
       const response = await fetch(loadUrl, { signal: controller.signal });
       clearTimeout(timeout);
@@ -176,59 +372,6 @@ export function DataProvider({ children }) {
     }
   }, []);
 
-  const pushToCloud = useCallback(async (dataToPush) => {
-    if (!CLOUD_URL || isSyncingRef.current) return false;
-    isSyncingRef.current = true;
-
-    try {
-      const now = Date.now();
-      // Allow faster pushes (1s min) instead of 2s for superfast sync
-      if (now - lastPushRef.current < 1000) {
-        isSyncingRef.current = false;
-        return false;
-      }
-      lastPushRef.current = now;
-
-      const syncVersion = now;
-      const dataWithMeta = {
-        ...dataToPush,
-        _syncVersion: syncVersion,
-        _lastSync: new Date().toISOString()
-      };
-
-      console.log('[SVAKS] Pushing to cloud, version:', syncVersion);
-
-      // Normalize the URL for POST
-      let postUrl = CLOUD_URL;
-      if (postUrl.includes('script.google.com/macros')) {
-        postUrl = postUrl.replace(/\/exec.*/, '/exec');
-      }
-
-      await fetch(postUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(dataWithMeta)
-      });
-
-      // Update version without triggering another push
-      skipNextPushRef.current = true;
-      setData(prev => ({ ...prev, _syncVersion: syncVersion }));
-
-      setSyncStatus('synced');
-      setSyncLastTime(new Date());
-      setSyncError('');
-      return true;
-    } catch (e) {
-      console.error('[SVAKS] Push error:', e.message);
-      setSyncStatus('error');
-      setSyncError(e.message);
-      return false;
-    } finally {
-      isSyncingRef.current = false;
-    }
-  }, []);
-
   const applyCloudData = useCallback((cloud) => {
     if (!cloud) return;
 
@@ -245,9 +388,6 @@ export function DataProvider({ children }) {
     const cloudVersion = Number(cloud._syncVersion) || 0;
 
     console.log('[SVAKS] Applying cloud data, version:', cloudVersion);
-
-    // Skip the next push since this data came from cloud
-    skipNextPushRef.current = true;
 
     setData({
       _syncVersion: cloudVersion,
@@ -280,10 +420,11 @@ export function DataProvider({ children }) {
     }
 
     setSyncStatus('synced');
-    setSyncLastTime(new Date());
+    const now = new Date().toISOString();
+    setLastSyncTime(now);
+    setSyncLastTime(now);
   }, [fetchCloudData, data._syncVersion, initialLoadDone, applyCloudData]);
 
-  // Initial cloud load
   useEffect(() => {
     if (!initialLoadDone) {
       console.log('[SVAKS] Initial cloud load...');
@@ -291,40 +432,26 @@ export function DataProvider({ children }) {
     }
   }, [initialLoadDone, loadFromCloud]);
 
-  // Fallback load after 1.5s if initial load hasn't completed
   useEffect(() => {
     const timer = setTimeout(() => {
       if (!initialLoadDone) {
         loadFromCloud();
       }
     }, 1500);
-    
     return () => clearTimeout(timer);
-  }, [initialLoadDone]);
+  }, [initialLoadDone, loadFromCloud]);
 
-  // Save to localStorage on data change
   useEffect(() => {
     const timer = setTimeout(() => saveToStorage(data), 100);
     return () => clearTimeout(timer);
   }, [data]);
 
-  // Push to cloud INSTANTLY on data change (superfast sync)
   useEffect(() => {
     if (!CLOUD_URL) return;
 
-    // Skip push if this data change came from cloud
-    if (skipNextPushRef.current) {
-      skipNextPushRef.current = false;
-      return;
-    }
-
-    setSyncStatus('syncing');
-    
-    // Instead of waiting 2000ms, push immediately for superfast responsiveness
-    pushToCloud(data);
+    pushToCloud(data, true);
   }, [data, pushToCloud]);
 
-  // Poll for cloud changes every 10s
   useEffect(() => {
     if (!CLOUD_URL) return;
 
@@ -339,66 +466,100 @@ export function DataProvider({ children }) {
         console.log('[SVAKS] Poll: New data detected, updating...');
         applyCloudData(cloud);
         setSyncStatus('synced');
-        setSyncLastTime(new Date());
+        const now = new Date().toISOString();
+        setLastSyncTime(now);
+        setSyncLastTime(now);
+      }
+
+      if (syncQueueRef.current.length > 0) {
+        processQueue();
       }
     };
 
-    pollRef.current = setInterval(poll, 10000);
+    pollRef.current = setInterval(poll, 8000);
     const quickCheck = setTimeout(poll, 3000);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       clearTimeout(quickCheck);
     };
-  }, [fetchCloudData, data._syncVersion, applyCloudData]);
+  }, [fetchCloudData, data._syncVersion, applyCloudData, processQueue]);
 
-  // Sync on tab visibility change
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         console.log('[SVAKS] Tab visible, syncing...');
         loadFromCloud();
+        if (syncQueueRef.current.length > 0) {
+          processQueue();
+        }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [loadFromCloud]);
+  }, [loadFromCloud, processQueue]);
 
-  // Sync on window focus
   useEffect(() => {
     const handleFocus = () => {
       console.log('[SVAKS] Window focused...');
       loadFromCloud();
+      if (syncQueueRef.current.length > 0) {
+        processQueue();
+      }
     };
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [loadFromCloud]);
+  }, [loadFromCloud, processQueue]);
+
+  useEffect(() => {
+    const queue = loadSyncQueue();
+    syncQueueRef.current = queue;
+    setPendingCount(queue.length);
+    if (queue.length > 0) {
+      scheduleRetry();
+    }
+  }, [scheduleRetry]);
+
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   const syncToGoogleSheet = useCallback(async () => {
     if (!CLOUD_URL) {
-      alert('Google Sheets URL nahi mila!');
+      console.warn('Google Sheets URL nahi mila!');
       return;
     }
     setSyncStatus('syncing');
-    const success = await pushToCloud(data);
+    const success = await pushToCloud(data, true);
     if (success) {
-      alert('Data Google Sheets mein save ho gaya!');
+      console.log('Data Google Sheets mein save ho gaya!');
     }
   }, [pushToCloud, data]);
 
   const loadFromGoogleSheet = useCallback(async () => {
     if (!CLOUD_URL) {
-      alert('Google Sheets URL nahi mila!');
+      console.warn('Google Sheets URL nahi mila!');
       return;
     }
-    if (!confirm('Cloud se data load karna hai?')) return;
+    if (!confirm('Cloud se data load karna hai? Current local data replace ho jayega.')) return;
 
     setSyncStatus('loading');
     await loadFromCloud();
-    alert('Data load ho gaya!');
+    console.log('Data load ho gaya!');
   }, [loadFromCloud]);
+
+  const clearSyncQueue = useCallback(() => {
+    syncQueueRef.current = [];
+    saveSyncQueue([]);
+    setPendingCount(0);
+    setSyncError('');
+    console.log('[SVAKS] Sync queue cleared');
+  }, []);
 
   const update = useCallback((key, value) => {
     setData(prev => ({ ...prev, [key]: value }));
@@ -514,8 +675,10 @@ export function DataProvider({ children }) {
           notifications: imp.notifications || defaultNotifications.map(n => ({ ...n })),
           settings: { ...defaultSettings, ...(imp.settings || {}) }
         });
-        alert('Data import successful!');
-      } catch { alert('Invalid JSON file!'); }
+        console.log('Data import successful!');
+      } catch {
+        console.error('Invalid JSON file!');
+      }
     };
     reader.readAsText(file);
   }, []);
@@ -528,8 +691,8 @@ export function DataProvider({ children }) {
     committee: data.committee, updateCommittee,
     notifications: data.notifications, addNotification, updateNotification, deleteNotification,
     settings: data.settings, updateSetting,
-    syncStatus, syncError, syncLastTime,
-    syncToGoogleSheet, loadFromGoogleSheet,
+    syncStatus, syncError, syncLastTime, pendingCount,
+    syncToGoogleSheet, loadFromGoogleSheet, clearSyncQueue,
     exportJSON, importJSON
   };
 
