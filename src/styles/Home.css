@@ -811,6 +811,7 @@
   transform: translateY(-10px);
   box-shadow: 0 25px 60px rgba(212, 160, 23, 0.25);
   border-color: var(--gold);
+  background: linear-gradient(135deg, white 0%, #FFFDF5 100%);
 }
 
 .premium-stat:hover .stat-shine {
@@ -862,12 +863,31 @@
 .notification-board {
   max-width: 900px;
   margin: 0 auto;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
-  border: 2px solid var(--gold);
+  background: rgba(30, 15, 5, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 2px solid rgba(212, 160, 23, 0.4);
   border-radius: 20px;
   padding: 30px;
   position: relative;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(212, 160, 23, 0.1);
+}
+
+.live-indicator {
+  width: 10px;
+  height: 10px;
+  background-color: #ff4757;
+  border-radius: 50%;
+  display: inline-block;
+  margin-left: 10px;
+  box-shadow: 0 0 10px #ff4757;
+  animation: pulseLive 1.5s infinite;
+}
+
+@keyframes pulseLive {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(255, 71, 87, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); }
 }
 
 .notification-header {
@@ -895,14 +915,31 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.notification-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.notification-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.notification-content::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--gold), var(--saffron));
+  border-radius: 10px;
 }
 
 .notification-card {
-  background: rgba(0, 0, 0, 0.4);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
   border-radius: 16px;
   padding: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.3s;
+  border: 1px solid rgba(212, 160, 23, 0.2);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
 }
@@ -912,15 +949,21 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 4px;
+  width: 5px;
   height: 100%;
   background: linear-gradient(180deg, var(--saffron), var(--gold));
+  transition: width 0.3s;
 }
 
 .notification-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-5px);
   border-color: var(--gold);
-  box-shadow: 0 12px 30px rgba(212, 160, 23, 0.15);
+  box-shadow: 0 15px 35px rgba(212, 160, 23, 0.2);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+}
+
+.notification-card:hover::before {
+  width: 8px;
 }
 
 .notification-badge {

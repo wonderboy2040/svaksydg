@@ -1323,21 +1323,27 @@ function NotificationsSection() {
         </div>
 
         {activeNotifs.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>No active notices. Add your first notice!</p>
+          <div style={{ textAlign: 'center', padding: '40px', background: '#f8f9fa', borderRadius: '12px', border: '1px dashed #ccc' }}>
+            <span style={{ fontSize: '40px', display: 'block', marginBottom: '10px' }}>📢</span>
+            <p style={{ color: '#666', margin: 0 }}>No active notices on the website.</p>
+            <p style={{ color: '#999', fontSize: '14px', marginTop: '4px' }}>Click "+ Add Notice" to announce something.</p>
+          </div>
         ) : (
           <div className="notifications-list">
             {activeNotifs.map((notif, i) => (
-              <div key={notif.id} className="notification-item">
-                <div className="notification-number">{i + 1}</div>
-                <div className="notification-content-admin">
-                  <span className="notification-badge">{notif.title}</span>
-                  <p>{notif.text}</p>
-                  <span className="notification-date-admin">{notif.date}</span>
+              <div key={notif.id} className="notification-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '16px', flex: 1 }}>
+                  <div className="notification-number">{i + 1}</div>
+                  <div className="notification-content-admin">
+                    <span className="notification-badge">{notif.title}</span>
+                    <p style={{ fontSize: '16px', fontWeight: '500' }}>{notif.text}</p>
+                    <span className="notification-date-admin" style={{ color: '#888' }}>📅 {notif.date}</span>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <button onClick={() => handleToggle(notif)} className="btn-action btn-edit" style={{ fontSize: '11px', padding: '6px 10px' }}>Hide</button>
-                  <button onClick={() => handleEdit(notif)} className="btn-action btn-edit">Edit</button>
-                  <button onClick={() => handleDelete(notif.id)} className="btn-action btn-delete">Delete</button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '100px' }}>
+                  <button onClick={() => handleToggle(notif)} className="btn-action" style={{ background: '#f1f2f6', color: '#57606f', border: '1px solid #dfe4ea', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>👁️ Hide</button>
+                  <button onClick={() => handleEdit(notif)} className="btn-action" style={{ background: 'var(--gold)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>✏️ Edit</button>
+                  <button onClick={() => handleDelete(notif.id)} className="btn-action" style={{ background: 'var(--danger)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>🗑️ Delete</button>
                 </div>
               </div>
             ))}
@@ -1352,16 +1358,18 @@ function NotificationsSection() {
           </div>
           <div className="notifications-list">
             {inactiveNotifs.map((notif, i) => (
-              <div key={notif.id} className="notification-item">
-                <div className="notification-number" style={{ background: 'linear-gradient(135deg, #666, #888)' }}>{i + 1}</div>
-                <div className="notification-content-admin">
-                  <span className="notification-badge" style={{ background: 'linear-gradient(135deg, #666, #888)' }}>{notif.title}</span>
-                  <p>{notif.text}</p>
-                  <span className="notification-date-admin">{notif.date}</span>
+              <div key={notif.id} className="notification-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: 0.8, filter: 'grayscale(50%)' }}>
+                <div style={{ display: 'flex', gap: '16px', flex: 1 }}>
+                  <div className="notification-number" style={{ background: 'linear-gradient(135deg, #666, #888)' }}>{i + 1}</div>
+                  <div className="notification-content-admin">
+                    <span className="notification-badge" style={{ background: 'linear-gradient(135deg, #666, #888)' }}>{notif.title}</span>
+                    <p style={{ fontSize: '16px', fontWeight: '500' }}>{notif.text}</p>
+                    <span className="notification-date-admin" style={{ color: '#888' }}>📅 {notif.date}</span>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <button onClick={() => handleToggle(notif)} className="btn-action btn-edit" style={{ fontSize: '11px', padding: '6px 10px', background: 'linear-gradient(135deg, #00B894, #00cec9)' }}>Show</button>
-                  <button onClick={() => handleDelete(notif.id)} className="btn-action btn-delete">Delete</button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '100px' }}>
+                  <button onClick={() => handleToggle(notif)} className="btn-action" style={{ background: '#00B894', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>📢 Publish</button>
+                  <button onClick={() => handleDelete(notif.id)} className="btn-action" style={{ background: 'var(--danger)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>🗑️ Delete</button>
                 </div>
               </div>
             ))}

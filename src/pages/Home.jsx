@@ -157,14 +157,14 @@ function Home() {
       <section className={`notifications-section ${visibleSections.notifications ? 'visible' : ''}`} id="notifications">
         <div className="notification-board">
           <div className="notification-header">
-            <span className="om-mini">ॐ</span>
-            <h3>Notice Board</h3>
-            <span className="om-mini">ॐ</span>
+            <span className="om-mini">📜</span>
+            <h3>Notice Board <span className="live-indicator"></span></h3>
+            <span className="om-mini">📜</span>
           </div>
           <div className="notification-content">
             {activeNotifs.length > 0 ? (
               activeNotifs.map((notif, i) => (
-                <div key={notif.id} className="notification-card">
+                <div key={notif.id} className="notification-card" style={{ animationDelay: `${i * 0.1}s` }}>
                   <span className="notification-badge">{notif.title}</span>
                   <p>{notif.text}</p>
                   <span className="notification-date">{notif.date}</span>
