@@ -671,10 +671,14 @@ export function DataProvider({ children }) {
 		});
 	}, []);
 
-	const updateMember = useCallback((id, fields) => {
+	const updateMember = useCallback((id, updates) => {
+		const parsedUpdates = { ...updates };
+		if (parsedUpdates.monthlyFee !== undefined) {
+			parsedUpdates.monthlyFee = Math.abs(Number(parsedUpdates.monthlyFee)) || 0;
+		}
 		setData(prev => ({
 			...prev,
-			members: prev.members.map(m => m.id === id ? { ...m, ...validateMember({ ...m, ...fields }) } : m)
+			members: prev.members.map(m => m.id === id ? validateMember({ ...m, ...parsedUpdates }) : m)
 		}));
 	}, []);
 
@@ -690,9 +694,13 @@ export function DataProvider({ children }) {
 	}, []);
 
 	const updateCollection = useCallback((id, fields) => {
+		const parsedUpdates = { ...fields };
+		if (parsedUpdates.amount !== undefined) {
+			parsedUpdates.amount = Math.abs(Number(parsedUpdates.amount)) || 0;
+		}
 		setData(prev => ({
 			...prev,
-			collections: prev.collections.map(c => c.id === id ? { ...c, ...validateCollection({ ...c, ...fields }) } : c)
+			collections: prev.collections.map(c => c.id === id ? validateCollection({ ...c, ...parsedUpdates }) : c)
 		}));
 	}, []);
 
@@ -707,10 +715,14 @@ export function DataProvider({ children }) {
 		});
 	}, []);
 
-	const updateExpenditure = useCallback((id, fields) => {
+	const updateExpenditure = useCallback((id, updates) => {
+		const parsedUpdates = { ...updates };
+		if (parsedUpdates.amount !== undefined) {
+			parsedUpdates.amount = Math.abs(Number(parsedUpdates.amount)) || 0;
+		}
 		setData(prev => ({
 			...prev,
-			expenditure: prev.expenditure.map(e => e.id === id ? { ...e, ...validateExpenditure({ ...e, ...fields }) } : e)
+			expenditure: prev.expenditure.map(e => e.id === id ? validateExpenditure({ ...e, ...parsedUpdates }) : e)
 		}));
 	}, []);
 

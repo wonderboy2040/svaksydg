@@ -63,10 +63,11 @@ function DashboardSection() {
     }
     if (window.confirm(`Mark all ${unpaidCount} pending members as paid for ${MONTHS[currentMonth]}?`)) {
       const newCollections = [...collections];
+      let i = 0;
       monthStatus.forEach(m => {
         if (!m.paid) {
           newCollections.push({
-            id: Date.now() + Math.random(),
+            id: Date.now() + i++,
             memberId: m.id,
             memberName: m.name,
             amount: members.find(mem => mem.id === m.id)?.monthlyFee || 100,
@@ -375,12 +376,31 @@ function MembersSection() {
 
 // ===== COLLECTIONS SECTION =====
 function CollectionsSection() {
-  const { collections, members, addCollection, deleteCollection } = useData();
+  const { collections, members, addCollection, updateCollection, deleteCollection } = useData();
   const { addToast } = useToast();
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
   const [filterYear, setFilterYear] = useState(new Date().getFullYear());
   const [showModal, setShowModal] = useState(false);
+  const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ memberId: '', memberName: '', amount: '', source: 'Monthly Collection', note: '', date: new Date().toISOString().split('T')[0] });
+
+  const resetForm = () => {
+    setForm({ memberId: '', memberName: '', amount: '', source: 'Monthly Collection', note: '', date: new Date().toISOString().split('T')[0] });
+    setEditId(null);
+  };
+
+  const openEdit = (item) => {
+    setForm({
+      memberId: item.memberId || '',
+      memberName: item.memberName || '',
+      amount: item.amount || '',
+      source: item.source || 'Monthly Collection',
+      note: item.note || '',
+      date: item.date || ''
+    });
+    setEditId(item.id);
+    setShowModal(true);
+  };
 
   const filtered = collections.filter(c => {
     if (!c.date) return false;
@@ -404,10 +424,15 @@ function CollectionsSection() {
       addToast('Please enter amount!', 'danger');
       return;
     }
-    addCollection(form);
-    addToast('Payment recorded successfully!', 'success');
+    if (editId) {
+      updateCollection(editId, form);
+      addToast('Payment updated successfully!', 'success');
+    } else {
+      addCollection(form);
+      addToast('Payment recorded successfully!', 'success');
+    }
     setShowModal(false);
-    setForm({ memberId: '', memberName: '', amount: '', source: 'Monthly Collection', note: '', date: new Date().toISOString().split('T')[0] });
+    resetForm();
   };
 
   const handleDelete = (id) => {
@@ -434,7 +459,7 @@ function CollectionsSection() {
       <div className="admin-card">
         <div className="admin-card-header">
           <h3>Collections</h3>
-          <button className="btn-primary" onClick={() => setShowModal(true)}>+ Add Collection</button>
+          <button className="btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>+ Add Collection</button>
         </div>
 
         <div className="filters-row">
@@ -469,6 +494,7 @@ function CollectionsSection() {
                     <td><span className="badge badge-gold">{c.source || 'Other'}</span></td>
                     <td>{c.note || '-'}</td>
                     <td>
+                      <button onClick={() => openEdit(c)} className="btn-action btn-edit">Edit</button>
                       <button onClick={() => handleDelete(c.id)} className="btn-action btn-delete">Delete</button>
                     </td>
                   </tr>
@@ -479,7 +505,7 @@ function CollectionsSection() {
         )}
       </div>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Add New Collection">
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); resetForm(); }} title={editId ? "Edit Collection" : "Add New Collection"}>
         <div className="modal-form">
           <div className="form-group">
             <label>Select Member</label>
@@ -534,8 +560,8 @@ function CollectionsSection() {
             />
           </div>
           <div className="modal-actions">
-            <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-            <button className="btn-primary" onClick={handleSave}>Add Collection</button>
+            <button className="btn-secondary" onClick={() => { setShowModal(false); resetForm(); }}>Cancel</button>
+            <button className="btn-primary" onClick={handleSave}>{editId ? "Save Changes" : "Add Collection"}</button>
           </div>
         </div>
       </Modal>
@@ -961,9 +987,6 @@ function SettingsSection() {
     appName: settings.appName,
     location: settings.location,
     monthlyFee: settings.monthlyFee,
-    pin: '',
-    newPin: '',
-    confirmPin: '',
     sheetUrl: settings.sheetUrl
   });
 
