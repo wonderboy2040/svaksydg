@@ -2,7 +2,7 @@
 // Hardcoded values for complete setup bypass and direct access
 // URL and PIN are globally defined here
 
-export const CLOUD_URL = 'https://script.google.com/macros/s/AKfycbxfHoBOTcj8iqrg5YFXggGs_bkkfAxFomtZo0GoQLxeZceGWc003jwY9X80Kd-9RNjxfA/exec';
+export const CLOUD_URL = 'https://script.google.com/macros/s/AKfycbzxvg-BmEI5DW5I_hTQhhalKBaRMWHCl8DMgyNBTPiKZMnsVRUXXTztIxXP4PtVsQJBSQ/exec';
 export const ADMIN_PIN = '1234';
 
 // Sync Configuration
