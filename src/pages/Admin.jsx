@@ -14,7 +14,7 @@ const MONTHS = [
 
 const CURRENT_YEAR = new Date().getFullYear();
 const COLLECTION_SOURCES = ['Monthly Collection', 'Donation', 'Special Contribution', 'Event Income', 'Other'];
-const EXPENSE_CATEGORIES = ['Admin Cost', 'Event Expense', 'Maintenance', 'Help/Support', 'Travel', 'Printing', 'Other'];
+const EXPENSE_CATEGORIES = ['Gudi Pujari', 'Cleaner', 'Milk & Curd', 'Flowers', 'SAMAJ Collection', 'Admin Cost', 'Event Expense', 'Maintenance', 'Help/Support', 'Travel', 'Printing', 'Other'];
 
 function getMonthPaymentStatus(members, collections, month, year) {
   const paid = new Set();
