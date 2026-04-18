@@ -189,6 +189,9 @@ export function DataProvider({ children }) {
 	};
 
 	const processQueue = useCallback(async () => {
+		const isAdmin = sessionStorage.getItem('svaks_admin') === 'true';
+		if (!isAdmin) return;
+
 		if (!CLOUD_URL || isSyncingRef.current || syncQueueRef.current.length === 0) {
 			return;
 		}
@@ -279,6 +282,9 @@ export function DataProvider({ children }) {
 
 	// INSTANT cloud push - NO THROTTLE
 	const pushToCloud = useCallback(async (dataToPush) => {
+		const isAdmin = sessionStorage.getItem('svaks_admin') === 'true';
+		if (!isAdmin) return false;
+
 		if (!CLOUD_URL) {
 			console.warn('[SVAKS] No cloud URL configured');
 			return false;
@@ -467,6 +473,9 @@ export function DataProvider({ children }) {
 
 	useEffect(() => {
 		if (!CLOUD_URL) return;
+
+		const isAdmin = sessionStorage.getItem('svaks_admin') === 'true';
+		if (!isAdmin) return;
 
 		// Skip push if this data change came from cloud fetch (prevents infinite loop)
 		if (skipNextPushRef.current) {
