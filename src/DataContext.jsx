@@ -391,7 +391,10 @@ export function DataProvider({ children }) {
 			(cloud.members?.length > 0) ||
 			(cloud.committee?.some(c => c.name)) ||
 			(cloud.collections?.length > 0) ||
-			cloud.settings?.pin;
+			(cloud.expenditure?.length > 0) ||
+			(cloud.notifications?.length > 0) ||
+			cloud.settings?.pin || 
+			cloud.settings?.appName !== defaultSettings.appName;
 
 		if (!hasContent) {
 			return;
