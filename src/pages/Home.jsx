@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useData } from '../DataContext';
 import { getDirectImageUrl, PLACEHOLDER_IMAGE } from '../utils';
+import samajMataImg from '../smjmata.jpg';
 import '../styles/Home.css';
 
 function AnimatedNumber({ value, duration = 1500 }) {
@@ -101,8 +102,11 @@ function Home() {
           <div className="corner-ornament bottom-right"></div>
         </div>
         <div className="hero-content">
-          <div className="om-premium">
-            <span className="om-main">ॐ</span>
+          <div className="hero-avatar-frame">
+            <div className="hero-avatar-glow"></div>
+            <div className="hero-avatar-border">
+              <img src={samajMataImg} alt="Samaj Mata" className="hero-avatar-img" />
+            </div>
           </div>
           <h1 className="hero-english-title">Soma Vamshi Aarya Kshthriya Samaj</h1>
           <p className="hero-subtitle">YADGIR • KARNATAKA</p>
