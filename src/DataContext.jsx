@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { CLOUD_URL, SYNC_INTERVAL, INITIAL_LOAD_DELAY, MAX_RETRY_ATTEMPTS } from './config';
 
+// Debounce interval for auto-push (ms)
+const AUTO_PUSH_DEBOUNCE = 2000;
+
 const DataContext = createContext(null);
 
 const defaultSettings = {
@@ -216,12 +219,12 @@ export function DataProvider({ children }) {
 
 				const response = await fetch(postUrl, {
 					method: 'POST',
-					mode: 'cors',
-					headers: { 'Content-Type': 'application/json' },
+					mode: 'no-cors',
+					headers: { 'Content-Type': 'text/plain' },
 					body: JSON.stringify(dataWithMeta)
 				});
 
-				if (response.ok || response.type === 'opaque') {
+				if (response.ok || response.status === 0 || response.type === 'opaque') {
 					successCount++;
 					console.log('[SVAKS] Queue item synced successfully');
 				} else {
@@ -300,13 +303,13 @@ export function DataProvider({ children }) {
 
 			const response = await fetch(postUrl, {
 				method: 'POST',
-				mode: 'cors',
-				headers: { 'Content-Type': 'application/json' },
+				mode: 'no-cors',
+				headers: { 'Content-Type': 'text/plain' },
 				body: JSON.stringify(dataWithMeta)
 			});
 
 			// Check if request was successful
-			if (response.ok || response.type === 'opaque') {
+			if (response.ok || response.status === 0 || response.type === 'opaque') {
 				console.log('[SVAKS] Push successful!');
 				const nowISO = new Date().toISOString();
 				setLastSyncTime(nowISO);
@@ -358,7 +361,10 @@ export function DataProvider({ children }) {
 			const controller = new AbortController();
 			const timeout = setTimeout(() => controller.abort(), 15000);
 
-			const response = await fetch(loadUrl, { signal: controller.signal });
+			const response = await fetch(loadUrl, {
+				signal: controller.signal,
+				redirect: 'follow'
+			});
 			clearTimeout(timeout);
 
 			if (!response.ok) {
@@ -394,6 +400,9 @@ export function DataProvider({ children }) {
 		const cloudVersion = Number(cloud._syncVersion) || 0;
 
 		console.log('[SVAKS] Applying cloud data, version:', cloudVersion);
+
+		// Mark that the next data change should NOT trigger a push (prevents infinite loop)
+		skipNextPushRef.current = true;
 
 		setData({
 			_syncVersion: cloudVersion,
@@ -449,9 +458,19 @@ export function DataProvider({ children }) {
 		return () => clearTimeout(timer);
 	}, [initialLoadDone, loadFromCloud]);
 
-	// Auto-sync: Push data to cloud INSTANTLY (no debounce, no throttle)
+	// Auto-sync: Push data to cloud with DEBOUNCE to prevent infinite loop
+	const autoPushTimerRef = useRef(null);
+	const skipNextPushRef = useRef(false);
+
 	useEffect(() => {
 		if (!CLOUD_URL) return;
+
+		// Skip push if this data change came from cloud fetch (prevents infinite loop)
+		if (skipNextPushRef.current) {
+			skipNextPushRef.current = false;
+			saveToStorage(data);
+			return;
+		}
 
 		// Only auto-sync if there's actual data to sync
 		const hasData = data.members?.length > 0 ||
@@ -461,8 +480,19 @@ export function DataProvider({ children }) {
 			data.notifications?.length > 0;
 
 		if (hasData) {
-			pushToCloud(data);
+			// Save to localStorage immediately
+			saveToStorage(data);
+
+			// Debounce cloud push
+			if (autoPushTimerRef.current) clearTimeout(autoPushTimerRef.current);
+			autoPushTimerRef.current = setTimeout(() => {
+				pushToCloud(data);
+			}, AUTO_PUSH_DEBOUNCE);
 		}
+
+		return () => {
+			if (autoPushTimerRef.current) clearTimeout(autoPushTimerRef.current);
+		};
 	}, [data, pushToCloud]);
 
 	// Poll for changes from cloud - FASTER (3 seconds)

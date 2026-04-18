@@ -983,28 +983,32 @@ function SettingsSection() {
   };
 
   const APPS_SCRIPT_CODE = `function doPost(e) {
-  var data = JSON.parse(e.postData.contents);
+  var raw = e.postData.contents;
+  var data = JSON.parse(raw);
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetNames = ['Members', 'Collections', 'Expenditure', 'Committee', 'Settings'];
-  var dataKeys = ['members', 'collections', 'expenditure', 'committee', 'settings'];
 
-  // Save all data to respective sheets
-  for (var i = 0; i < sheetNames.length; i++) {
-    var sheet = ss.getSheetByName(sheetNames[i]);
-    if (!sheet) sheet = ss.insertSheet(sheetNames[i]);
+  var arraySheets = ['Members', 'Collections', 'Expenditure', 'Committee', 'Notifications'];
+  var arrayKeys = ['members', 'collections', 'expenditure', 'committee', 'notifications'];
+
+  for (var i = 0; i < arraySheets.length; i++) {
+    var sheet = ss.getSheetByName(arraySheets[i]);
+    if (!sheet) sheet = ss.insertSheet(arraySheets[i]);
     sheet.clear();
-    var rows = data[dataKeys[i]];
+    var rows = data[arrayKeys[i]];
     if (rows && rows.length > 0) {
       var headers = Object.keys(rows[0]);
       var sheetValues = [headers];
       rows.forEach(function(item) {
-        sheetValues.push(headers.map(function(h) { return item[h] !== undefined ? item[h] : ''; }));
+        sheetValues.push(headers.map(function(h) {
+          var val = item[h];
+          if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
+          return val !== undefined && val !== null ? val : '';
+        }));
       });
       sheet.getRange(1, 1, sheetValues.length, headers.length).setValues(sheetValues);
     }
   }
 
-  // Save sync metadata (version, lastSync) in Settings sheet
   var settingsSheet = ss.getSheetByName('Settings');
   if (!settingsSheet) settingsSheet = ss.insertSheet('Settings');
   settingsSheet.clear();
@@ -1017,35 +1021,43 @@ function SettingsSection() {
     });
   }
 
-  return ContentService.createTextOutput('OK');
+  return ContentService.createTextOutput(JSON.stringify({status:'ok'})).setMimeType(ContentService.MimeType.JSON);
 }
 
 function doGet(e) {
   if (e.parameter.action === 'load' || e.parameter.load === 'true') {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = {};
-    var sheetNames = ['Members', 'Collections', 'Expenditure', 'Committee', 'Settings'];
-    var dataKeys = ['members', 'collections', 'expenditure', 'committee', 'settings'];
 
-    // Load all data from sheets
-    for (var i = 0; i < sheetNames.length; i++) {
-      var sheet = ss.getSheetByName(sheetNames[i]);
+    var arraySheets = ['Members', 'Collections', 'Expenditure', 'Committee', 'Notifications'];
+    var arrayKeys = ['members', 'collections', 'expenditure', 'committee', 'notifications'];
+
+    for (var i = 0; i < arraySheets.length; i++) {
+      var sheet = ss.getSheetByName(arraySheets[i]);
       if (sheet) {
         var values = sheet.getDataRange().getValues();
         if (values.length > 1) {
           var headers = values[0];
-          data[dataKeys[i]] = values.slice(1).map(function(row) {
+          data[arrayKeys[i]] = values.slice(1).map(function(row) {
             var obj = {};
-            headers.forEach(function(h, idx) { obj[h] = row[idx]; });
+            headers.forEach(function(h, idx) {
+              var val = row[idx];
+              if (val === 'TRUE') val = true;
+              else if (val === 'FALSE') val = false;
+              else if (h === 'id' || h === 'amount' || h === 'monthlyFee' || h === 'memberId') {
+                var num = Number(val);
+                if (!isNaN(num) && val !== '') val = num;
+              }
+              obj[h] = val;
+            });
             return obj;
           });
         } else {
-          data[dataKeys[i]] = [];
+          data[arrayKeys[i]] = [];
         }
       }
     }
 
-    // Load sync metadata from Settings
     var settingsSheet = ss.getSheetByName('Settings');
     if (settingsSheet) {
       var settingsData = settingsSheet.getDataRange().getValues();
@@ -1053,8 +1065,12 @@ function doGet(e) {
       for (var j = 1; j < settingsData.length; j++) {
         var key = settingsData[j][0];
         var value = settingsData[j][1];
-        if (key === '_syncVersion' || key === '_lastSync') {
-          data[key] = value;
+        if (key === '_syncVersion') {
+          data._syncVersion = Number(value) || 0;
+        } else if (key === '_lastSync') {
+          data._lastSync = value;
+        } else if (key === 'monthlyFee') {
+          settings[key] = Number(value) || 100;
         } else if (key) {
           settings[key] = value;
         }
@@ -1163,7 +1179,7 @@ function doGet(e) {
                 </div>
                 <div style={{ padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
                   <div style={{ color: '#888' }}>📊 Last sync</div>
-                  <div style={{ color: '#fff' }}>{syncLastTime ? syncLastTime.toLocaleTimeString() : 'Never'}</div>
+                  <div style={{ color: '#fff' }}>{syncLastTime ? new Date(syncLastTime).toLocaleTimeString() : 'Never'}</div>
                 </div>
               </div>
 {/* Sync Status Display */}

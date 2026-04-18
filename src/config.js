@@ -6,7 +6,7 @@ export const CLOUD_URL = 'https://script.google.com/macros/s/AKfycbxfHoBOTcj8iqr
 export const ADMIN_PIN = '1234';
 
 // Sync Configuration
-export const SYNC_INTERVAL = 3000; // 3 seconds for real-time sync
+export const SYNC_INTERVAL = 15000; // 15 seconds for reliable multi-device sync
 export const INITIAL_LOAD_DELAY = 500; // Faster initial load
 export const MAX_RETRY_ATTEMPTS = 5; // Max retries for failed syncs
 
