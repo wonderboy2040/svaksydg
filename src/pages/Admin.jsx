@@ -747,6 +747,10 @@ function GallerySection() {
   const [newPhotoUrl, setNewPhotoUrl] = useState('');
   const [form, setForm] = useState({ title: '', date: '', cover: '' });
 
+  // Safe gallery with default
+  const safeGallery = gallery || [];
+  const totalPhotos = safeGallery.reduce((sum, album) => sum + (album.photos?.length || 0), 0);
+
   const handleCreateAlbum = () => {
     if (!form.title.trim()) {
       addToast('Album title is required!', 'danger');
@@ -806,27 +810,24 @@ function GallerySection() {
     }
   };
 
-  // Calculate total photos
-  const totalPhotos = gallery.reduce((sum, album) => sum + (album.photos?.length || 0), 0);
-
   return (
     <div className="fade-in">
       <div className="admin-card">
         <div className="admin-card-header">
-          <h3>Photo Gallery ({gallery.length} albums, {totalPhotos} photos)</h3>
+          <h3>Photo Gallery ({safeGallery.length} albums, {totalPhotos} photos)</h3>
           <button className="btn-primary" onClick={() => { setEditAlbum(null); setForm({ title: '', date: '', cover: '' }); setShowModal(true); }}>
             + New Album
           </button>
         </div>
 
-        {gallery.length === 0 ? (
+        {safeGallery.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
             <span style={{ fontSize: '48px' }}>📸</span>
             <p>No albums yet. Create your first album!</p>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px', padding: '16px' }}>
-            {gallery.map(album => (
+            {safeGallery.map(album => (
               <div key={album.id} style={{
                 background: 'linear-gradient(135deg, #2D1810, #1a0a00)',
                 borderRadius: '12px',
