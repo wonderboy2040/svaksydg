@@ -1,14 +1,28 @@
-// Cloud Configuration
-// Hardcoded values for complete setup bypass and direct access
-// URL and PIN are globally defined here
+// ===========================================
+// SVAKS Configuration - Advanced Pro Level
+// ===========================================
 
-export const CLOUD_URL = 'https://script.google.com/macros/s/AKfycbzxvg-BmEI5DW5I_hTQhhalKBaRMWHCl8DMgyNBTPiKZMnsVRUXXTztIxXP4PtVsQJBSQ/exec';
+// IMPORTANT: Change the PIN below for security!
+// Default PIN: 1234 (Change this in production)
 export const ADMIN_PIN = '1234';
 
-// Sync Configuration
+// Cloud URL for multi-device sync (Google Apps Script)
+// To set up your own:
+// 1. Create a Google Sheet
+// 2. Go to Extensions > Apps Script
+// 3. Create a new project with doPost and doGet functions
+// 4. Deploy as Web App with "Anyone" access
+// 5. Copy the Web App URL here
+export const CLOUD_URL = 'https://script.google.com/macros/s/AKfycbzxvg-BmEI5DW5I_hTQhhalKBaRMWHCl8DMgyNBTPiKZMnsVRUXXTztIxXP4PtVsQJBSQ/exec';
+
+// Sync Configuration - Optimized for performance
 export const SYNC_INTERVAL = 15000; // 15 seconds for reliable multi-device sync
 export const INITIAL_LOAD_DELAY = 500; // Faster initial load
 export const MAX_RETRY_ATTEMPTS = 5; // Max retries for failed syncs
+
+// App Version
+export const APP_VERSION = '1.0.0';
+export const APP_NAME = 'SVAKS';
 
 // How auto-connect works:
 // App immediately connects to CLOUD_URL on boot.

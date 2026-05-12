@@ -117,35 +117,92 @@ function setLastSyncTime(time) {
 	}
 }
 
-const validateMember = (member) => ({
-	id: Number(member.id) || Date.now(),
-	name: String(member.name || '').trim().substring(0, 100),
-	father: String(member.father || '').trim().substring(0, 100),
-	phone: String(member.phone || '').trim().substring(0, 20),
-	address: String(member.address || '').trim().substring(0, 200),
-	occupation: String(member.occupation || '').trim().substring(0, 100),
-	monthlyFee: Number(member.monthlyFee) || 100,
-	other: String(member.other || '').trim().substring(0, 500),
-	joinedDate: member.joinedDate || new Date().toISOString().split('T')[0]
-});
+const validateMember = (member) => {
+	// Enhanced validation with proper sanitization
+	const safeId = Number(member?.id) || Date.now() + Math.random();
+	const safeName = String(member?.name || '').trim().substring(0, 100);
+	const safeFather = String(member?.father || '').trim().substring(0, 100);
+	const safePhone = String(member?.phone || '').trim().replace(/[^\d+-]/g, '').substring(0, 20);
+	const safeAddress = String(member?.address || '').trim().substring(0, 200);
+	const safeOccupation = String(member?.occupation || '').trim().substring(0, 100);
+	const safeMonthlyFee = Math.abs(Number(member?.monthlyFee)) || 100;
+	const safeOther = String(member?.other || '').trim().substring(0, 500);
+	const safeJoinedDate = member?.joinedDate || new Date().toISOString().split('T')[0];
 
-const validateCollection = (collection) => ({
-	id: Number(collection.id) || Date.now(),
-	memberId: Number(collection.memberId) || null,
-	memberName: String(collection.memberName || '').trim().substring(0, 100),
-	amount: Math.abs(Number(collection.amount)) || 0,
-	source: String(collection.source || 'Other').trim().substring(0, 50),
-	note: String(collection.note || '').trim().substring(0, 200),
-	date: collection.date || new Date().toISOString().split('T')[0]
-});
+	// Name is required - if empty, use "Unknown Member"
+	const finalName = safeName || 'Unknown Member';
 
-const validateExpenditure = (expenditure) => ({
-	id: Number(expenditure.id) || Date.now(),
-	category: String(expenditure.category || 'Other').trim().substring(0, 50),
-	amount: Math.abs(Number(expenditure.amount)) || 0,
-	description: String(expenditure.description || '').trim().substring(0, 200),
-	date: expenditure.date || new Date().toISOString().split('T')[0]
-});
+	return {
+		id: safeId,
+		name: finalName,
+		father: safeFather,
+		phone: safePhone,
+		address: safeAddress,
+		occupation: safeOccupation,
+		monthlyFee: safeMonthlyFee,
+		other: safeOther,
+		joinedDate: safeJoinedDate
+	};
+};
+
+const validateCollection = (collection) => {
+	// Enhanced collection validation
+	const safeId = Number(collection?.id) || Date.now() + Math.random();
+	const safeMemberId = collection?.memberId ? Number(collection.memberId) : null;
+	const safeMemberName = String(collection?.memberName || '').trim().substring(0, 100);
+	const safeAmount = Math.abs(Number(collection?.amount)) || 0;
+	const safeSource = String(collection?.source || 'Other').trim().substring(0, 50);
+	const safeNote = String(collection?.note || '').trim().substring(0, 200);
+	// Validate date format
+	let safeDate = collection?.date;
+	if (safeDate) {
+		const parsed = new Date(safeDate);
+		if (!isNaN(parsed.getTime())) {
+			safeDate = parsed.toISOString().split('T')[0];
+		} else {
+			safeDate = new Date().toISOString().split('T')[0];
+		}
+	} else {
+		safeDate = new Date().toISOString().split('T')[0];
+	}
+
+	return {
+		id: safeId,
+		memberId: safeMemberId,
+		memberName: safeMemberName,
+		amount: safeAmount,
+		source: safeSource,
+		note: safeNote,
+		date: safeDate
+	};
+};
+
+const validateExpenditure = (expenditure) => {
+	// Enhanced expenditure validation
+	const safeId = Number(expenditure?.id) || Date.now() + Math.random();
+	const safeCategory = String(expenditure?.category || 'Other').trim().substring(0, 50);
+	const safeAmount = Math.abs(Number(expenditure?.amount)) || 0;
+	const safeDescription = String(expenditure?.description || '').trim().substring(0, 200);
+	let safeDate = expenditure?.date;
+	if (safeDate) {
+		const parsed = new Date(safeDate);
+		if (!isNaN(parsed.getTime())) {
+			safeDate = parsed.toISOString().split('T')[0];
+		} else {
+			safeDate = new Date().toISOString().split('T')[0];
+		}
+	} else {
+		safeDate = new Date().toISOString().split('T')[0];
+	}
+
+	return {
+		id: safeId,
+		category: safeCategory,
+		amount: safeAmount,
+		description: safeDescription,
+		date: safeDate
+	};
+};
 
 const validateNotification = (notification) => ({
 	id: Number(notification.id) || Date.now(),

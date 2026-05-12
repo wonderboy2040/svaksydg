@@ -24,10 +24,23 @@ function AnimatedNumber({ value, duration = 1500 }) {
 }
 
 function Home() {
-  const { members, collections, expenditure, committee, settings, notifications } = useData();
+  const { members, collections, expenditure, committee, settings, notifications, syncStatus } = useData();
   const [visibleSections, setVisibleSections] = useState({});
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  // Online/Offline detection
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const activeNotifs = notifications.filter(n => n.active);
 
@@ -61,6 +74,29 @@ function Home() {
 
   return (
     <div style={{ background: 'var(--bg)' }}>
+      {/* Offline Indicator */}
+      {!isOnline && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          background: 'linear-gradient(90deg, #E17055, #D63031)',
+          color: 'white',
+          padding: '8px 16px',
+          textAlign: 'center',
+          fontSize: '13px',
+          fontFamily: 'Inter, sans-serif',
+          zIndex: 100000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px'
+        }}>
+          <span>📡</span>
+          <span>You are offline. Changes will be saved locally.</span>
+        </div>
+      )}
       <nav className={`home-nav ${scrolled ? 'scrolled' : ''}`}>
         <div className="home-nav-inner">
           <Link to="/" className="home-nav-logo">

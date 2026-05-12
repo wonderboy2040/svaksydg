@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import { getDirectImageUrl, PLACEHOLDER_IMAGE } from '../utils';
 import Modal from '../components/Modal';
 import PDFExport from '../components/PDFExport';
+import { APP_VERSION } from '../config';
 import '../styles/Admin.css';
 
 const MONTHS = [
@@ -18,21 +19,42 @@ const EXPENSE_CATEGORIES = ['Gudi Pujari', 'Cleaner', 'Milk & Curd', 'Flowers', 
 
 function getMonthPaymentStatus(members, collections, month, year) {
   const paid = new Set();
+
+  // Safe date parsing
+  const parseDate = (dateStr) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    return d;
+  };
+
   collections.forEach(c => {
-    if (!c.date) return;
-    const d = new Date(c.date);
-    if (d.getMonth() === month && d.getFullYear() === year && c.memberId) {
+    const d = parseDate(c.date);
+    if (d && d.getMonth() === month && d.getFullYear() === year && c.memberId) {
       paid.add(c.memberId);
     }
   });
-  return members.map(m => ({
-    id: m.id,
-    name: m.name,
-    phone: m.phone,
-    paid: paid.has(m.id),
-    paidCount: collections.filter(c => c.memberId === m.id && new Date(c.date).getMonth() === month && new Date(c.date).getFullYear() === year).length,
-    paidAmount: collections.filter(c => c.memberId === m.id && new Date(c.date).getMonth() === month && new Date(c.date).getFullYear() === year).reduce((s, c) => s + Number(c.amount || 0), 0)
-  }));
+
+  return members.map(m => {
+    // Filter collections for this member in this month
+    const memberCollections = collections.filter(c => {
+      if (!c.memberId || c.memberId !== m.id) return false;
+      const d = parseDate(c.date);
+      return d && d.getMonth() === month && d.getFullYear() === year;
+    });
+
+    const paidCount = memberCollections.length;
+    const paidAmount = memberCollections.reduce((s, c) => s + Number(c.amount || 0), 0);
+
+    return {
+      id: m.id,
+      name: m.name,
+      phone: m.phone,
+      paid: paid.has(m.id),
+      paidCount,
+      paidAmount
+    };
+  });
 }
 
 // ===== DASHBOARD SECTION =====
@@ -747,14 +769,53 @@ function ReportsSection() {
     PDFExport.exportReport(members, monthCollections, monthExpenditure, monthStatus, month, year);
   };
 
+  // CSV Export function
+  const handleExportCSV = (type) => {
+    let csvContent = '';
+    let filename = '';
+
+    if (type === 'collections') {
+      csvContent = 'Date,Member,Amount,Source,Note\n';
+      monthCollections.forEach(c => {
+        csvContent += `${c.date || ''},${c.memberName || ''},${c.amount || 0},${c.source || ''},${c.note || ''}\n`;
+      });
+      filename = `collections_${MONTHS[month]}_${year}.csv`;
+    } else if (type === 'expenditure') {
+      csvContent = 'Date,Category,Amount,Description\n';
+      monthExpenditure.forEach(e => {
+        csvContent += `${e.date || ''},${e.category || ''},${e.amount || 0},${e.description || ''}\n`;
+      });
+      filename = `expenditure_${MONTHS[month]}_${year}.csv`;
+    } else if (type === 'members') {
+      csvContent = 'Name,Father,Phone,Address,Occupation,Monthly Fee,Status,Amount Paid\n';
+      monthStatus.forEach(m => {
+        csvContent += `${m.name},${members.find(mem => mem.id === m.id)?.father || ''},${m.phone || ''},${members.find(mem => mem.id === m.id)?.address || ''},${members.find(mem => mem.id === m.id)?.occupation || ''},${members.find(mem => mem.id === m.id)?.monthlyFee || 0},${m.paid ? 'Paid' : 'Pending'},${m.paidAmount}\n`;
+      });
+      filename = `members_${MONTHS[month]}_${year}.csv`;
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="fade-in">
       <div className="admin-card">
         <div className="admin-card-header">
           <h3>Monthly Report - {MONTHS[month]} {year}</h3>
-          <button className="btn-primary" onClick={handleDownloadPDF}>
-            Download PDF
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn-primary" onClick={handleDownloadPDF}>
+              📄 PDF
+            </button>
+            <button className="btn-secondary" onClick={() => handleExportCSV('collections')} style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}>
+              📊 CSV
+            </button>
+          </div>
         </div>
 
         <div className="filters-row">
@@ -1246,10 +1307,10 @@ function doGet(e) {
           </p>
           <div className="settings-actions">
             <button className="btn-primary" onClick={exportJSON}>
-              Export JSON
+              📦 Full Backup (JSON)
             </button>
             <label className="btn-secondary" style={{ color: 'var(--gold)', borderColor: 'var(--gold)', cursor: 'pointer' }}>
-              Import JSON
+              📥 Import JSON
               <input
                 type="file"
                 accept=".json"
@@ -1257,6 +1318,48 @@ function doGet(e) {
                 style={{ display: 'none' }}
               />
             </label>
+          </div>
+          {/* Quick Exports */}
+          <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>Quick Export (CSV for Excel)</div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  const csv = 'ID,Name,Father,Phone,Address,Occupation,Monthly Fee\n' +
+                    members.map(m => `${m.id},${m.name},${m.father || ''},${m.phone || ''},${m.address || ''},${m.occupation || ''},${m.monthlyFee || 0}`).join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a'); a.href = url; a.download = 'members.csv'; a.click();
+                }}
+                style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#ccc', cursor: 'pointer' }}
+              >
+                👥 Members CSV
+              </button>
+              <button
+                onClick={() => {
+                  const csv = 'ID,Date,Member,Amount,Source,Note\n' +
+                    collections.map(c => `${c.id},${c.date || ''},${c.memberName || ''},${c.amount || 0},${c.source || ''},${c.note || ''}`).join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a'); a.href = url; a.download = 'collections.csv'; a.click();
+                }}
+                style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#ccc', cursor: 'pointer' }}
+              >
+                💰 Collections CSV
+              </button>
+              <button
+                onClick={() => {
+                  const csv = 'ID,Date,Category,Amount,Description\n' +
+                    expenditure.map(e => `${e.id},${e.date || ''},${e.category || ''},${e.amount || 0},${e.description || ''}`).join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a'); a.href = url; a.download = 'expenditure.csv'; a.click();
+                }}
+                style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#ccc', cursor: 'pointer' }}
+              >
+                📋 Expenses CSV
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1419,9 +1522,37 @@ function NotificationsSection() {
 // ===== MAIN ADMIN COMPONENT =====
 function Admin() {
   const navigate = useNavigate();
-  const { syncStatus, settings, loadFromGoogleSheet, pendingCount, syncToGoogleSheet } = useData();
+  const { syncStatus, settings, loadFromGoogleSheet, pendingCount, syncToGoogleSheet, members, collections, expenditure } = useData();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+
+  // Global search functionality
+  const handleGlobalSearch = (query) => {
+    setGlobalSearch(query);
+    if (!query.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    const q = query.toLowerCase();
+    const results = {
+      members: members.filter(m =>
+        m.name?.toLowerCase().includes(q) ||
+        m.phone?.includes(q) ||
+        m.father?.toLowerCase().includes(q)
+      ).slice(0, 5),
+      collections: collections.filter(c =>
+        c.memberName?.toLowerCase().includes(q) ||
+        c.note?.toLowerCase().includes(q)
+      ).slice(0, 5),
+      expenditure: expenditure.filter(e =>
+        e.description?.toLowerCase().includes(q) ||
+        e.category?.toLowerCase().includes(q)
+      ).slice(0, 5)
+    };
+    setSearchResults(results);
+  };
 
   useEffect(() => {
     const isAuthenticated = sessionStorage.getItem('svaks_admin') === 'true';
@@ -1520,10 +1651,96 @@ function Admin() {
             <button className="mobile-menu-btn" onClick={() => setMobileOpen(true)}>☰</button>
             <h2>{activeTabLabel}</h2>
           </div>
+          {/* Global Search */}
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              placeholder="Search..."
+              value={globalSearch}
+              onChange={e => handleGlobalSearch(e.target.value)}
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '8px',
+                padding: '8px 12px',
+                color: 'white',
+                fontSize: '13px',
+                width: '160px',
+                outline: 'none'
+              }}
+            />
+            {searchResults && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '4px',
+                background: '#2D1810',
+                border: '1px solid rgba(212,160,23,0.3)',
+                borderRadius: '8px',
+                padding: '12px',
+                minWidth: '250px',
+                maxHeight: '300px',
+                overflow: 'auto',
+                zIndex: 1000,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+              }}>
+                {searchResults.members.length === 0 && searchResults.collections.length === 0 && searchResults.expenditure.length === 0 ? (
+                  <div style={{ color: '#888', fontSize: '13px' }}>No results found</div>
+                ) : (
+                  <>
+                    {searchResults.members.length > 0 && (
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ color: '#D4A017', fontSize: '11px', fontWeight: '600', marginBottom: '6px' }}>👥 Members ({searchResults.members.length})</div>
+                        {searchResults.members.map(m => (
+                          <div key={m.id} style={{ fontSize: '13px', color: '#ccc', padding: '4px 0', cursor: 'pointer' }}
+                            onClick={() => { setActiveTab('members'); setGlobalSearch(''); setSearchResults(null); }}>
+                            {m.name} {m.phone && `(${m.phone})`}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {searchResults.collections.length > 0 && (
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ color: '#D4A017', fontSize: '11px', fontWeight: '600', marginBottom: '6px' }}>💰 Collections ({searchResults.collections.length})</div>
+                        {searchResults.collections.map(c => (
+                          <div key={c.id} style={{ fontSize: '13px', color: '#ccc', padding: '4px 0', cursor: 'pointer' }}
+                            onClick={() => { setActiveTab('collections'); setGlobalSearch(''); setSearchResults(null); }}>
+                            {c.memberName || 'Unknown'} - ₹{Number(c.amount || 0).toLocaleString('en-IN')}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {searchResults.expenditure.length > 0 && (
+                      <div>
+                        <div style={{ color: '#D4A017', fontSize: '11px', fontWeight: '600', marginBottom: '6px' }}>📋 Expenses ({searchResults.expenditure.length})</div>
+                        {searchResults.expenditure.map(e => (
+                          <div key={e.id} style={{ fontSize: '13px', color: '#ccc', padding: '4px 0', cursor: 'pointer' }}
+                            onClick={() => { setActiveTab('expenditure'); setGlobalSearch(''); setSearchResults(null); }}>
+                            {e.category} - ₹{Number(e.amount || 0).toLocaleString('en-IN')}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <span className="date">{new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
         </div>
         <div className="admin-content">
           {renderContent()}
+        </div>
+        {/* Version Footer */}
+        <div style={{
+          textAlign: 'center',
+          padding: '12px',
+          fontSize: '11px',
+          color: 'rgba(255,255,255,0.3)',
+          borderTop: '1px solid rgba(255,255,255,0.05)'
+        }}>
+          SVAKS Admin v{APP_VERSION} | ॐ Sarve Bhavantu Sukhinah
         </div>
       </main>
     </div>
