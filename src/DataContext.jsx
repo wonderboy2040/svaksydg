@@ -32,6 +32,31 @@ const defaultCommittee = [
 	{ id: 7, position: 'Senior Member', name: '', photo: '', phone: '', address: '' }
 ];
 
+// Default gallery albums
+const defaultGallery = [
+	{
+		id: 1,
+		title: 'Navratri Celebration 2025',
+		date: 'October 2025',
+		cover: '',
+		photos: []
+	},
+	{
+		id: 2,
+		title: 'Diwali Milan 2025',
+		date: 'November 2025',
+		cover: '',
+		photos: []
+	},
+	{
+		id: 3,
+		title: 'Annual Function 2025',
+		date: 'December 2025',
+		cover: '',
+		photos: []
+	}
+];
+
 const STORAGE_KEY = 'svaks_data';
 const SYNC_QUEUE_KEY = 'svaks_sync_queue';
 const LAST_SYNC_KEY = 'svaks_last_sync';
@@ -48,6 +73,7 @@ function loadFromStorage() {
 				expenditure: parsed.expenditure || [],
 				committee: parsed.committee || defaultCommittee.map(c => ({ ...c })),
 				notifications: parsed.notifications || defaultNotifications.map(n => ({ ...n })),
+				gallery: parsed.gallery || defaultGallery.map(g => ({ ...g })),
 				settings: { ...defaultSettings, ...(parsed.settings || {}) }
 			};
 		}
@@ -61,6 +87,7 @@ function loadFromStorage() {
 		expenditure: [],
 		committee: defaultCommittee.map(c => ({ ...c })),
 		notifications: defaultNotifications.map(n => ({ ...n })),
+		gallery: defaultGallery.map(g => ({ ...g })),
 		settings: { ...defaultSettings }
 	};
 }
@@ -74,6 +101,7 @@ function saveToStorage(data) {
 			expenditure: data.expenditure,
 			committee: data.committee,
 			notifications: data.notifications,
+			gallery: data.gallery,
 			settings: data.settings
 		}));
 	} catch (e) {
@@ -805,6 +833,63 @@ export function DataProvider({ children }) {
 		setData(prev => ({ ...prev, notifications: prev.notifications.filter(n => n.id !== id) }));
 	}, []);
 
+	// Gallery functions
+	const addGalleryAlbum = useCallback((album) => {
+		const newAlbum = {
+			id: Date.now(),
+			title: album.title || 'New Album',
+			date: album.date || new Date().toLocaleDateString('en-IN'),
+			cover: album.cover || '',
+			photos: album.photos || []
+		};
+		setData(prev => ({ ...prev, gallery: [...prev.gallery, newAlbum] }));
+	}, []);
+
+	const updateGalleryAlbum = useCallback((id, fields) => {
+		setData(prev => ({
+			...prev,
+			gallery: prev.gallery.map(album =>
+				album.id === id ? { ...album, ...fields } : album
+			)
+		}));
+	}, []);
+
+	const deleteGalleryAlbum = useCallback((id) => {
+		setData(prev => ({ ...prev, gallery: prev.gallery.filter(a => a.id !== id) }));
+	}, []);
+
+	const addPhotoToAlbum = useCallback((albumId, photoUrl) => {
+		setData(prev => ({
+			...prev,
+			gallery: prev.gallery.map(album => {
+				if (album.id === albumId) {
+					const newPhotos = [...album.photos, { id: Date.now(), url: photoUrl }];
+					// Auto-set cover if not set
+					const newCover = album.cover || photoUrl;
+					return { ...album, photos: newPhotos, cover: newCover };
+				}
+				return album;
+			})
+		}));
+	}, []);
+
+	const removePhotoFromAlbum = useCallback((albumId, photoId) => {
+		setData(prev => ({
+			...prev,
+			gallery: prev.gallery.map(album => {
+				if (album.id === albumId) {
+					const newPhotos = album.photos.filter(p => p.id !== photoId);
+					// Update cover if removed photo was cover
+					const newCover = album.cover === album.photos.find(p => p.id === photoId)?.url
+						? (newPhotos[0]?.url || '')
+						: album.cover;
+					return { ...album, photos: newPhotos, cover: newCover };
+				}
+				return album;
+			})
+		}));
+	}, []);
+
 	const exportJSON = useCallback(() => {
 		const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
 		const url = URL.createObjectURL(blob);
@@ -827,6 +912,7 @@ export function DataProvider({ children }) {
 					expenditure: imp.expenditure || [],
 					committee: imp.committee || defaultCommittee.map(c => ({ ...c })),
 					notifications: imp.notifications || defaultNotifications.map(n => ({ ...n })),
+					gallery: imp.gallery || defaultGallery.map(g => ({ ...g })),
 					settings: { ...defaultSettings, ...(imp.settings || {}) }
 				});
 				console.log('Data import successful!');
@@ -844,6 +930,8 @@ export function DataProvider({ children }) {
 		expenditure: data.expenditure, addExpenditure, updateExpenditure, deleteExpenditure,
 		committee: data.committee, updateCommittee,
 		notifications: data.notifications, addNotification, updateNotification, deleteNotification,
+		gallery: data.gallery, addGalleryAlbum, updateGalleryAlbum, deleteGalleryAlbum,
+		addPhotoToAlbum, removePhotoFromAlbum,
 		settings: data.settings, updateSetting,
 		syncStatus, syncError, syncLastTime, pendingCount,
 		syncToGoogleSheet, loadFromGoogleSheet, clearSyncQueue,

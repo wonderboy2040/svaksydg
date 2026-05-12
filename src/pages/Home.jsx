@@ -24,7 +24,7 @@ function AnimatedNumber({ value, duration = 1500 }) {
 }
 
 function Home() {
-  const { members, collections, expenditure, committee, settings, notifications, syncStatus } = useData();
+  const { members, collections, expenditure, committee, settings, notifications, gallery, syncStatus } = useData();
   const [visibleSections, setVisibleSections] = useState({});
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -51,7 +51,7 @@ function Home() {
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
-      const sections = ['home', 'stats', 'about', 'committee', 'notifications', 'info'];
+      const sections = ['home', 'stats', 'about', 'committee', 'gallery', 'notifications', 'info'];
       sections.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -311,6 +311,56 @@ function Home() {
             );
           })}
         </div>
+      </section>
+
+      {/* Gallery Section */}
+      <section className={`gallery-section ${visibleSections.gallery ? 'visible' : ''}`} id="gallery">
+        <div className="section-header">
+          <span className="ancient-label">GALLERY</span>
+          <h2>Samaj Events Gallery</h2>
+          <p>Photos from our community celebrations and programs</p>
+        </div>
+
+        {gallery && gallery.length > 0 ? (
+          <div className="gallery-grid">
+            {gallery.filter(album => album.photos && album.photos.length > 0).slice(0, 6).map(album => (
+              <div key={album.id} className="gallery-album-card">
+                <div className="gallery-album-cover">
+                  {album.photos && album.photos[0] ? (
+                    <img
+                      src={getDirectImageUrl(album.photos[0].url)}
+                      alt={album.title}
+                      onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                    />
+                  ) : null}
+                  <div className="gallery-album-placeholder" style={{ display: album.photos && album.photos[0] ? 'none' : 'flex' }}>
+                    📸
+                  </div>
+                  <div className="gallery-album-overlay">
+                    <span className="photo-count">{album.photos?.length || 0} 📷</span>
+                  </div>
+                </div>
+                <div className="gallery-album-info">
+                  <h4>{album.title}</h4>
+                  <span>{album.date}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="gallery-empty">
+            <span style={{ fontSize: '48px' }}>📸</span>
+            <p>No event photos yet. Add photos from Admin panel!</p>
+          </div>
+        )}
+
+        {gallery && gallery.some(album => album.photos && album.photos.length > 0) && (
+          <div style={{ textAlign: 'center', marginTop: '24px' }}>
+            <a href="#committee" className="btn-secondary" style={{ padding: '12px 24px', display: 'inline-block' }}>
+              View All Albums →
+            </a>
+          </div>
+        )}
       </section>
 
       <section className={`info-section ${visibleSections.info ? 'visible' : ''}`} id="info">

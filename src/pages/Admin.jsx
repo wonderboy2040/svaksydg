@@ -736,6 +736,264 @@ function ExpenditureSection() {
   );
 }
 
+// ===== GALLERY SECTION =====
+function GallerySection() {
+  const { gallery, addGalleryAlbum, updateGalleryAlbum, deleteGalleryAlbum, addPhotoToAlbum, removePhotoFromAlbum } = useData();
+  const { addToast } = useToast();
+  const [showModal, setShowModal] = useState(false);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [editAlbum, setEditAlbum] = useState(null);
+  const [selectedAlbum, setSelectedAlbum] = useState(null);
+  const [newPhotoUrl, setNewPhotoUrl] = useState('');
+  const [form, setForm] = useState({ title: '', date: '', cover: '' });
+
+  const handleCreateAlbum = () => {
+    if (!form.title.trim()) {
+      addToast('Album title is required!', 'danger');
+      return;
+    }
+    addGalleryAlbum({
+      title: form.title,
+      date: form.date || new Date().toLocaleDateString('en-IN'),
+      cover: form.cover,
+      photos: []
+    });
+    addToast('Album created!', 'success');
+    setShowModal(false);
+    setForm({ title: '', date: '', cover: '' });
+  };
+
+  const handleUpdateAlbum = () => {
+    if (!editAlbum || !form.title.trim()) return;
+    updateGalleryAlbum(editAlbum.id, {
+      title: form.title,
+      date: form.date,
+      cover: form.cover
+    });
+    addToast('Album updated!', 'success');
+    setShowModal(false);
+    setEditAlbum(null);
+    setForm({ title: '', date: '', cover: '' });
+  };
+
+  const handleAddPhoto = () => {
+    if (!newPhotoUrl.trim()) {
+      addToast('Please enter photo URL!', 'danger');
+      return;
+    }
+    addPhotoToAlbum(selectedAlbum.id, newPhotoUrl);
+    addToast('Photo added!', 'success');
+    setNewPhotoUrl('');
+    setShowPhotoModal(false);
+  };
+
+  const openEdit = (album) => {
+    setEditAlbum(album);
+    setForm({ title: album.title, date: album.date || '', cover: album.cover || '' });
+    setShowModal(true);
+  };
+
+  const openPhotoAdd = (album) => {
+    setSelectedAlbum(album);
+    setNewPhotoUrl('');
+    setShowPhotoModal(true);
+  };
+
+  const handleDeleteAlbum = (id) => {
+    if (window.confirm('Delete this album and all photos?')) {
+      deleteGalleryAlbum(id);
+      addToast('Album deleted', 'info');
+    }
+  };
+
+  // Calculate total photos
+  const totalPhotos = gallery.reduce((sum, album) => sum + (album.photos?.length || 0), 0);
+
+  return (
+    <div className="fade-in">
+      <div className="admin-card">
+        <div className="admin-card-header">
+          <h3>Photo Gallery ({gallery.length} albums, {totalPhotos} photos)</h3>
+          <button className="btn-primary" onClick={() => { setEditAlbum(null); setForm({ title: '', date: '', cover: '' }); setShowModal(true); }}>
+            + New Album
+          </button>
+        </div>
+
+        {gallery.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+            <span style={{ fontSize: '48px' }}>📸</span>
+            <p>No albums yet. Create your first album!</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px', padding: '16px' }}>
+            {gallery.map(album => (
+              <div key={album.id} style={{
+                background: 'linear-gradient(135deg, #2D1810, #1a0a00)',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                border: '1px solid rgba(212,160,23,0.2)'
+              }}>
+                {/* Cover Image */}
+                <div style={{ height: '140px', background: album.cover ? `url(${getDirectImageUrl(album.cover)}) center/cover` : 'linear-gradient(135deg, #800000, #a00000)', position: 'relative' }}>
+                  {!album.cover && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: '40px', color: '#D4A017' }}>
+                      📸
+                    </div>
+                  )}
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.8))', padding: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#D4A017' }}>{album.photos?.length || 0} photos</span>
+                  </div>
+                </div>
+
+                {/* Album Info */}
+                <div style={{ padding: '12px' }}>
+                  <h4 style={{ color: '#fff', fontSize: '14px', marginBottom: '4px', fontWeight: '600' }}>{album.title}</h4>
+                  <p style={{ color: '#888', fontSize: '12px', marginBottom: '8px' }}>{album.date}</p>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <button onClick={() => setSelectedAlbum(album)} style={{ flex: 1, padding: '6px', background: 'rgba(212,160,23,0.2)', border: '1px solid rgba(212,160,23,0.4)', borderRadius: '6px', color: '#D4A017', fontSize: '12px', cursor: 'pointer' }}>
+                      👁️ View
+                    </button>
+                    <button onClick={() => openPhotoAdd(album)} style={{ flex: 1, padding: '6px', background: 'rgba(0,184,148,0.2)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '6px', color: '#00B894', fontSize: '12px', cursor: 'pointer' }}>
+                      ➕ Photo
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                    <button onClick={() => openEdit(album)} style={{ flex: 1, padding: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#ccc', fontSize: '11px', cursor: 'pointer' }}>
+                      ✏️ Edit
+                    </button>
+                    <button onClick={() => handleDeleteAlbum(album.id)} style={{ flex: 1, padding: '6px', background: 'rgba(225,112,85,0.2)', border: '1px solid rgba(225,112,85,0.4)', borderRadius: '6px', color: '#E17055', fontSize: '11px', cursor: 'pointer' }}>
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* View Album Modal */}
+      {selectedAlbum && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.9)', zIndex: 99999,
+          display: 'flex', flexDirection: 'column'
+        }}>
+          <div style={{ padding: '16px', background: '#2D1810', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ color: '#D4A017', marginBottom: '4px' }}>{selectedAlbum.title}</h3>
+              <span style={{ color: '#888', fontSize: '13px' }}>{selectedAlbum.date} | {selectedAlbum.photos?.length || 0} photos</span>
+            </div>
+            <button onClick={() => setSelectedAlbum(null)} style={{ padding: '8px 16px', background: '#800000', border: 'none', borderRadius: '8px', color: 'white', cursor: 'pointer' }}>
+              ✕ Close
+            </button>
+          </div>
+          <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+            {selectedAlbum.photos?.length === 0 ? (
+              <div style={{ textAlign: 'center', color: '#888', padding: '40px' }}>
+                <span style={{ fontSize: '48px' }}>📷</span>
+                <p>No photos in this album yet.</p>
+                <button onClick={() => openPhotoAdd(selectedAlbum)} style={{ marginTop: '16px', padding: '12px 24px', background: '#D4A017', border: 'none', borderRadius: '8px', color: '#000', cursor: 'pointer', fontWeight: '600' }}>
+                  Add Photos
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
+                {selectedAlbum.photos?.map(photo => (
+                  <div key={photo.id} style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden' }}>
+                    <img
+                      src={getDirectImageUrl(photo.url)}
+                      alt=""
+                      style={{ width: '100%', height: '180px', objectFit: 'cover' }}
+                      onError={(e) => { e.target.src = PLACEHOLDER_IMAGE; }}
+                    />
+                    <button
+                      onClick={() => {
+                        removePhotoFromAlbum(selectedAlbum.id, photo.id);
+                        addToast('Photo removed', 'info');
+                      }}
+                      style={{
+                        position: 'absolute', top: '8px', right: '8px',
+                        background: 'rgba(225,112,85,0.9)', border: 'none', borderRadius: '50%',
+                        width: '28px', height: '28px', cursor: 'pointer', color: 'white', fontSize: '14px'
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{ padding: '16px', background: '#2D1810', textAlign: 'center' }}>
+            <button onClick={() => openPhotoAdd(selectedAlbum)} style={{ padding: '12px 24px', background: 'linear-gradient(135deg, #D4A017, #FF9933)', border: 'none', borderRadius: '8px', color: '#000', cursor: 'pointer', fontWeight: '600', fontSize: '14px' }}>
+              + Add More Photos
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Create/Edit Album Modal */}
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditAlbum(null); setForm({ title: '', date: '', cover: '' }); }} title={editAlbum ? 'Edit Album' : 'Create New Album'}>
+        <div className="modal-form">
+          <div className="form-group">
+            <label>Album Title *</label>
+            <input
+              value={form.title}
+              onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
+              placeholder="e.g., Navratri Celebration 2025"
+            />
+          </div>
+          <div className="form-group">
+            <label>Date</label>
+            <input
+              value={form.date}
+              onChange={e => setForm(prev => ({ ...prev, date: e.target.value }))}
+              placeholder="e.g., October 2025"
+            />
+          </div>
+          <div className="form-group">
+            <label>Cover Photo URL (Google Drive)</label>
+            <input
+              value={form.cover}
+              onChange={e => setForm(prev => ({ ...prev, cover: e.target.value }))}
+              placeholder="https://drive.google.com/..."
+            />
+            <small style={{ color: '#888', fontSize: '11px' }}>Paste Google Drive photo URL for album cover</small>
+          </div>
+          <div className="modal-actions">
+            <button className="btn-secondary" onClick={() => { setShowModal(false); setEditAlbum(null); }}>Cancel</button>
+            <button className="btn-primary" onClick={editAlbum ? handleUpdateAlbum : handleCreateAlbum}>
+              {editAlbum ? 'Save Changes' : 'Create Album'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Add Photo Modal */}
+      <Modal isOpen={showPhotoModal} onClose={() => { setShowPhotoModal(false); setNewPhotoUrl(''); }} title="Add Photo to Album">
+        <div className="modal-form">
+          <p style={{ color: '#888', fontSize: '13px', marginBottom: '16px' }}>
+            Paste a Google Drive photo URL. You can add multiple photos one by one.
+          </p>
+          <div className="form-group">
+            <label>Photo URL (Google Drive) *</label>
+            <input
+              value={newPhotoUrl}
+              onChange={e => setNewPhotoUrl(e.target.value)}
+              placeholder="https://drive.google.com/file/d/..."
+            />
+          </div>
+          <div className="modal-actions">
+            <button className="btn-secondary" onClick={() => { setShowPhotoModal(false); setNewPhotoUrl(''); }}>Cancel</button>
+            <button className="btn-primary" onClick={handleAddPhoto}>Add Photo</button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
 // ===== REPORTS SECTION =====
 function ReportsSection() {
   const { members, collections, expenditure } = useData();
@@ -1572,6 +1830,7 @@ function Admin() {
     { id: 'collections', label: 'Collections', icon: '💰' },
     { id: 'expenditure', label: 'Expenditure', icon: '📋' },
     { id: 'notifications', label: 'Notices', icon: '📢' },
+    { id: 'gallery', label: 'Gallery', icon: '📸' },
     { id: 'reports', label: 'Reports', icon: '📑' },
     { id: 'committee', label: 'Committee', icon: '🏛️' },
     { id: 'settings', label: 'Settings', icon: '⚙️' }
@@ -1584,6 +1843,7 @@ function Admin() {
       case 'collections': return <CollectionsSection />;
       case 'expenditure': return <ExpenditureSection />;
       case 'notifications': return <NotificationsSection />;
+      case 'gallery': return <GallerySection />;
       case 'reports': return <ReportsSection />;
       case 'committee': return <CommitteeSection />;
       case 'settings': return <SettingsSection />;

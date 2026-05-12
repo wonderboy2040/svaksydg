@@ -18,7 +18,10 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(git commit *)",
-      "Bash(npm --version)"
+      "Bash(npm --version)",
+      "Bash(Start-Sleep -Seconds 5)",
+      "Bash(Get-Content \"C:\\\\Users\\\\Nagraj\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\E--SVAKS-svaksydg-1\\\\4fb88b1e-017e-4051-85ec-d14212d3d1ec\\\\tasks\\\\bmx8iabf2.output\")",
+      "Bash(powershell *)"
     ]
   }
 }
