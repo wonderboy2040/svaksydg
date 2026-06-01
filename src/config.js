@@ -13,7 +13,7 @@ export const ADMIN_PIN = '1234';
 // 3. Create a new project with doPost and doGet functions
 // 4. Deploy as Web App with "Anyone" access
 // 5. Copy the Web App URL here
-export const CLOUD_URL = 'https://script.google.com/macros/s/AKfycbzxvg-BmEI5DW5I_hTQhhalKBaRMWHCl8DMgyNBTPiKZMnsVRUXXTztIxXP4PtVsQJBSQ/exec';
+export const CLOUD_URL = 'https://script.google.com/macros/s/AKfycbz_8gmgc2BlOtt_W5lJbMUigSQEOSJIwSUjnkKpxJxSedZjppS4EpBFTW1sspV1_SudWg/exec';
 
 // Sync Configuration - Optimized for performance
 export const SYNC_INTERVAL = 15000; // 15 seconds for reliable multi-device sync
