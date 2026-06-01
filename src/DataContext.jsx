@@ -475,6 +475,31 @@ export function DataProvider({ children }) {
 		}
 	}, []);
 
+	// MERGE helper: combines local and cloud arrays by ID — ONLY ADDS new items and UPDATES existing ones.
+	// NEVER deletes items. Items only in local are kept. Items only in cloud are added.
+	const mergeArraysById = useCallback((localArr, cloudArr) => {
+		if (!Array.isArray(cloudArr) || cloudArr.length === 0) return localArr || [];
+		if (!Array.isArray(localArr) || localArr.length === 0) return [...cloudArr];
+
+		const merged = [...localArr];
+		const localIds = new Set(localArr.map(item => item.id));
+
+		cloudArr.forEach(cloudItem => {
+			if (!localIds.has(cloudItem.id)) {
+				// New item from cloud — ADD it
+				merged.push(cloudItem);
+			} else {
+				// Existing item — UPDATE with cloud data
+				const idx = merged.findIndex(item => item.id === cloudItem.id);
+				if (idx !== -1) {
+					merged[idx] = { ...merged[idx], ...cloudItem };
+				}
+			}
+		});
+
+		return merged;
+	}, []);
+
 	const applyCloudData = useCallback((cloud) => {
 		if (!cloud) return;
 
@@ -493,25 +518,52 @@ export function DataProvider({ children }) {
 
 		const cloudVersion = Number(cloud._syncVersion) || 0;
 
-		console.log('[SVAKS] Applying cloud data, version:', cloudVersion);
+		console.log('[SVAKS] MERGE-applying cloud data, version:', cloudVersion);
 
 		// Mark that the next data change should NOT trigger a push (prevents infinite loop)
 		skipNextPushRef.current = true;
 
-		setData({
-			_syncVersion: cloudVersion,
-			members: Array.isArray(cloud.members) ? cloud.members : [],
-			collections: Array.isArray(cloud.collections) ? cloud.collections : [],
-			expenditure: Array.isArray(cloud.expenditure) ? cloud.expenditure : [],
-			committee: Array.isArray(cloud.committee) && cloud.committee.length > 0
-				? cloud.committee.map(c => ({ ...(defaultCommittee.find(dc => dc.position === c.position) || {}), ...c }))
-				: defaultCommittee.map(c => ({ ...c })),
-			notifications: Array.isArray(cloud.notifications) && cloud.notifications.length > 0
-				? cloud.notifications
-				: defaultNotifications.map(n => ({ ...n })),
-			settings: { ...defaultSettings, ...(Array.isArray(cloud.settings) ? {} : (cloud.settings || {})) }
+		// MERGE: cloud data only ADDS new items and UPDATES existing — NEVER deletes
+		setData(prev => {
+			const mergedMembers = mergeArraysById(prev.members, cloud.members);
+			const mergedCollections = mergeArraysById(prev.collections, cloud.collections);
+			const mergedExpenditure = mergeArraysById(prev.expenditure, cloud.expenditure);
+			const mergedNotifications = mergeArraysById(prev.notifications, cloud.notifications);
+
+			// Committee: merge by ID, keeping local entries intact
+			let mergedCommittee = prev.committee;
+			if (Array.isArray(cloud.committee) && cloud.committee.length > 0) {
+				mergedCommittee = prev.committee.map(localC => {
+					const cloudC = cloud.committee.find(c => c.id === localC.id || c.position === localC.position);
+					if (cloudC && cloudC.name) {
+						return { ...localC, ...cloudC };
+					}
+					return localC;
+				});
+			}
+
+			// Settings: merge (cloud overrides individual fields, not whole object)
+			const mergedSettings = {
+				...defaultSettings,
+				...prev.settings,
+				...(Array.isArray(cloud.settings) ? {} : (cloud.settings || {}))
+			};
+
+			// Gallery: merge by ID
+			const mergedGallery = mergeArraysById(prev.gallery, cloud.gallery);
+
+			return {
+				_syncVersion: cloudVersion,
+				members: mergedMembers,
+				collections: mergedCollections,
+				expenditure: mergedExpenditure,
+				committee: mergedCommittee,
+				notifications: mergedNotifications,
+				gallery: mergedGallery,
+				settings: mergedSettings
+			};
 		});
-	}, []);
+	}, [mergeArraysById]);
 
 	const loadFromCloud = useCallback(async () => {
 		const cloud = await fetchCloudData(true);
@@ -716,7 +768,7 @@ export function DataProvider({ children }) {
 			console.warn('Google Sheets URL nahi mila!');
 			return;
 		}
-		if (!confirm('Cloud se data load karna hai? Current local data replace ho jayega.')) return;
+		if (!confirm('Cloud se latest data merge karna hai? (Sirf naya data add hoga, kuch delete nahi hoga)')) return;
 
 		setSyncStatus('loading');
 		await loadFromCloud();

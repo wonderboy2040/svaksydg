@@ -1325,33 +1325,64 @@ function SettingsSection() {
     }
   };
 
-  const APPS_SCRIPT_CODE = `function doPost(e) {
+  const APPS_SCRIPT_CODE = `// SVAKS v2 - MERGE-ONLY Sync (No Auto-Delete)
+// Data is ONLY added or updated. Delete/update must be done MANUALLY in the sheet.
+
+function doPost(e) {
   var raw = e.postData.contents;
   var data = JSON.parse(raw);
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  var arraySheets = ['Members', 'Collections', 'Expenditure', 'Committee', 'Notifications'];
-  var arrayKeys = ['members', 'collections', 'expenditure', 'committee', 'notifications'];
+  var arraySheets = ['Members', 'Collections', 'Expenditure', 'Committee', 'Notifications', 'Gallery'];
+  var arrayKeys = ['members', 'collections', 'expenditure', 'committee', 'notifications', 'gallery'];
 
   for (var i = 0; i < arraySheets.length; i++) {
     var sheet = ss.getSheetByName(arraySheets[i]);
     if (!sheet) sheet = ss.insertSheet(arraySheets[i]);
-    sheet.clear();
+
     var rows = data[arrayKeys[i]];
-    if (rows && rows.length > 0) {
-      var headers = Object.keys(rows[0]);
-      var sheetValues = [headers];
-      rows.forEach(function(item) {
-        sheetValues.push(headers.map(function(h) {
-          var val = item[h];
-          if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
-          return val !== undefined && val !== null ? val : '';
-        }));
-      });
-      sheet.getRange(1, 1, sheetValues.length, headers.length).setValues(sheetValues);
+    if (!rows || rows.length === 0) continue;
+
+    var headers;
+    var existingValues = sheet.getDataRange().getValues();
+    var existingIds = {};
+
+    if (existingValues.length > 0 && existingValues[0].length > 0 && existingValues[0][0] !== '') {
+      headers = existingValues[0];
+      var idCol = headers.indexOf('id');
+      if (idCol >= 0) {
+        for (var r = 1; r < existingValues.length; r++) {
+          existingIds[String(existingValues[r][idCol])] = r + 1;
+        }
+      }
+    } else {
+      headers = Object.keys(rows[0]);
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     }
+
+    rows.forEach(function(item) {
+      var itemId = String(item.id || '');
+      var rowData = headers.map(function(h) {
+        var val = item[h];
+        if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
+        if (Array.isArray(val) || typeof val === 'object') return JSON.stringify(val);
+        return val !== undefined && val !== null ? val : '';
+      });
+
+      if (itemId && existingIds[itemId]) {
+        // UPDATE existing row
+        sheet.getRange(existingIds[itemId], 1, 1, headers.length).setValues([rowData]);
+      } else {
+        // ADD new row
+        sheet.appendRow(rowData);
+        if (itemId) {
+          existingIds[itemId] = sheet.getLastRow();
+        }
+      }
+    });
   }
 
+  // Settings: always overwrite (small key-value data)
   var settingsSheet = ss.getSheetByName('Settings');
   if (!settingsSheet) settingsSheet = ss.insertSheet('Settings');
   settingsSheet.clear();
@@ -1372,8 +1403,8 @@ function doGet(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = {};
 
-    var arraySheets = ['Members', 'Collections', 'Expenditure', 'Committee', 'Notifications'];
-    var arrayKeys = ['members', 'collections', 'expenditure', 'committee', 'notifications'];
+    var arraySheets = ['Members', 'Collections', 'Expenditure', 'Committee', 'Notifications', 'Gallery'];
+    var arrayKeys = ['members', 'collections', 'expenditure', 'committee', 'notifications', 'gallery'];
 
     for (var i = 0; i < arraySheets.length; i++) {
       var sheet = ss.getSheetByName(arraySheets[i]);
@@ -1390,6 +1421,8 @@ function doGet(e) {
               else if (h === 'id' || h === 'amount' || h === 'monthlyFee' || h === 'memberId') {
                 var num = Number(val);
                 if (!isNaN(num) && val !== '') val = num;
+              } else if (typeof val === 'string' && (val.startsWith('[') || val.startsWith('{'))) {
+                try { val = JSON.parse(val); } catch(ex) {}
               }
               obj[h] = val;
             });
