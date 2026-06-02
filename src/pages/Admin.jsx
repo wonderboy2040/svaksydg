@@ -294,21 +294,26 @@ function MembersSection() {
     setShowModal(true);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!form.name.trim()) {
       addToast('Name is required!', 'danger');
       return;
     }
-    let success;
-    if (editId) {
-      success = await updateMember(editId, form);
-      if (success) addToast('Member updated & saved to cloud!', 'success');
-    } else {
-      success = await addMember(form);
-      if (success) addToast('Member added & saved to cloud!', 'success');
-    }
-    if (!success) addToast('Failed to save to cloud!', 'danger');
+    
+    // Close modal and reset instantly for native speed feel
     setShowModal(false);
+    
+    if (editId) {
+      updateMember(editId, form).then(success => {
+        if (success) addToast('Member updated & saved to cloud!', 'success');
+        else addToast('Failed to save to cloud!', 'danger');
+      });
+    } else {
+      addMember(form).then(success => {
+        if (success) addToast('Member added & saved to cloud!', 'success');
+        else addToast('Failed to save to cloud!', 'danger');
+      });
+    }
     resetForm();
   };
 
@@ -434,7 +439,7 @@ function CollectionsSection() {
 
   const monthlyTotal = filtered.reduce((s, c) => s + Number(c.amount || 0), 0);
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!form.memberId && !form.memberName) {
       addToast('Please select a member or enter name!', 'danger');
       return;
@@ -443,16 +448,21 @@ function CollectionsSection() {
       addToast('Please enter amount!', 'danger');
       return;
     }
-    let success;
-    if (editId) {
-      success = await updateCollection(editId, form);
-      if (success) addToast('Payment updated & saved to cloud!', 'success');
-    } else {
-      success = await addCollection(form);
-      if (success) addToast('Payment recorded & saved to cloud!', 'success');
-    }
-    if (!success) addToast('Failed to save to cloud!', 'danger');
+    
+    // Close modal instantly
     setShowModal(false);
+    
+    if (editId) {
+      updateCollection(editId, form).then(success => {
+        if (success) addToast('Payment updated & saved to cloud!', 'success');
+        else addToast('Failed to save to cloud!', 'danger');
+      });
+    } else {
+      addCollection(form).then(success => {
+        if (success) addToast('Payment recorded & saved to cloud!', 'success');
+        else addToast('Failed to save to cloud!', 'danger');
+      });
+    }
     resetForm();
   };
 
@@ -615,21 +625,26 @@ function ExpenditureSection() {
     setShowModal(true);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!form.amount || Number(form.amount) <= 0) {
       addToast('Please enter amount!', 'danger');
       return;
     }
-    let success;
-    if (editId) {
-      success = await updateExpenditure(editId, form);
-      if (success) addToast('Expense updated & saved to cloud!', 'success');
-    } else {
-      success = await addExpenditure(form);
-      if (success) addToast('Expense recorded & saved to cloud!', 'success');
-    }
-    if (!success) addToast('Failed to save to cloud!', 'danger');
+    
+    // Close modal instantly
     setShowModal(false);
+    
+    if (editId) {
+      updateExpenditure(editId, form).then(success => {
+        if (success) addToast('Expense updated & saved to cloud!', 'success');
+        else addToast('Failed to save to cloud!', 'danger');
+      });
+    } else {
+      addExpenditure(form).then(success => {
+        if (success) addToast('Expense recorded & saved to cloud!', 'success');
+        else addToast('Failed to save to cloud!', 'danger');
+      });
+    }
     resetForm();
   };
 
@@ -741,48 +756,51 @@ function GallerySection() {
   const safeGallery = gallery || [];
   const totalPhotos = safeGallery.reduce((sum, album) => sum + (album.photos?.length || 0), 0);
 
-  const handleCreateAlbum = async () => {
+  const handleCreateAlbum = () => {
     if (!form.title.trim()) {
       addToast('Album title is required!', 'danger');
       return;
     }
-    const success = await addGalleryAlbum({
+    setShowModal(false);
+    addGalleryAlbum({
       title: form.title,
       date: form.date || new Date().toLocaleDateString('en-IN'),
       cover: form.cover,
       photos: []
+    }).then(success => {
+      if (success) addToast('Album created & saved to cloud!', 'success');
+      else addToast('Failed to save to cloud!', 'danger');
     });
-    if (success) addToast('Album created & saved to cloud!', 'success');
-    else addToast('Failed to save to cloud!', 'danger');
-    setShowModal(false);
     setForm({ title: '', date: '', cover: '' });
   };
 
-  const handleUpdateAlbum = async () => {
+  const handleUpdateAlbum = () => {
     if (!editAlbum || !form.title.trim()) return;
-    const success = await updateGalleryAlbum(editAlbum.id, {
+    setShowModal(false);
+    updateGalleryAlbum(editAlbum.id, {
       title: form.title,
       date: form.date,
       cover: form.cover
+    }).then(success => {
+      if (success) addToast('Album updated & saved to cloud!', 'success');
+      else addToast('Failed to save to cloud!', 'danger');
     });
-    if (success) addToast('Album updated & saved to cloud!', 'success');
-    else addToast('Failed to save to cloud!', 'danger');
-    setShowModal(false);
     setEditAlbum(null);
     setForm({ title: '', date: '', cover: '' });
   };
 
-  const handleAddPhoto = async () => {
+  const handleAddPhoto = () => {
     if (!newPhotoUrl.trim()) {
       addToast('Please enter photo URL!', 'danger');
       return;
     }
-    const success = await addPhotoToAlbum(selectedAlbum.id, newPhotoUrl);
-    if (success) addToast('Photo added & saved to cloud!', 'success');
-    else addToast('Failed to save to cloud!', 'danger');
+    setShowPhotoModal(false);
+    addPhotoToAlbum(selectedAlbum.id, newPhotoUrl).then(success => {
+      if (success) addToast('Photo added & saved to cloud!', 'success');
+      else addToast('Failed to save to cloud!', 'danger');
+    });
     setNewPhotoUrl('');
     setUrlStatus(null);
-    setShowPhotoModal(false);
   };
 
   const openEdit = (album) => {
@@ -1185,7 +1203,7 @@ function ReportsSection() {
 
 // ===== COMMITTEE SECTION =====
 function CommitteeSection() {
-  const { committee, updateCommittee, saveCommittee, saving } = useData();
+  const { committee, updateCommittee, saveCommittee, addCommitteeMember, deleteCommitteeMember, saving } = useData();
   const { addToast } = useToast();
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -1204,6 +1222,27 @@ function CommitteeSection() {
     setHasChanges(true);
   };
 
+  const handleAddMember = () => {
+    addCommitteeMember({
+      id: Date.now(),
+      position: 'Committee Member',
+      name: '',
+      photo: '',
+      phone: '',
+      address: ''
+    });
+    setHasChanges(true);
+    addToast('New member added locally! Fill details and save.', 'info');
+  };
+
+  const handleDeleteMember = (id) => {
+    if (window.confirm('Delete this committee member?')) {
+      deleteCommitteeMember(id);
+      setHasChanges(true);
+      addToast('Member removed locally! Save changes to sync.', 'info');
+    }
+  };
+
   const handleSaveCommittee = async () => {
     const success = await saveCommittee();
     if (success) {
@@ -1218,8 +1257,11 @@ function CommitteeSection() {
     <div className="fade-in">
       <div className="admin-card">
         <div className="admin-card-header">
-          <h3>Committee Members</h3>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <h3>Committee Members ({committee.length})</h3>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="btn-primary" style={{ background: '#00B894' }} onClick={handleAddMember}>
+              ➕ Add Committee Member
+            </button>
             {hasChanges && <span style={{ fontSize: '12px', color: '#FDCB6E' }}>⚠️ Unsaved changes</span>}
             <button className="btn-primary" onClick={handleSaveCommittee} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               {saving ? '🔄 Saving...' : '💾 Save Committee to Cloud'}
@@ -1229,71 +1271,117 @@ function CommitteeSection() {
         <p style={{ fontSize: '13px', color: '#888', padding: '0 16px', marginBottom: '8px' }}>
           Edit fields below, then click "💾 Save Committee to Cloud" to push changes. Use Google Drive or Google Photos links for photos.
         </p>
-        <div className="committee-edit-grid">
-          {committee.map(member => {
-            const imgError = false;
-            const photoValidation = member.photo ? validateImageUrl(member.photo) : null;
-            return (
-              <div className="committee-edit-card" key={member.id}>
-                <div className="photo-section">
-                  {member.photo ? (
-                    <img
-                      src={getDirectImageUrl(member.photo)}
-                      alt={member.name}
-                      className="committee-photo"
-                      onError={(e) => {
-                        e.target.src = PLACEHOLDER_IMAGE;
-                      }}
-                    />
-                  ) : null}
-                  <div className="avatar-placeholder" style={member.photo && !imgError ? { display: 'none' } : {}}>
-                    {getInitials(member.name || member.position)}
+        
+        {committee.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', background: '#f8f9fa', borderRadius: '12px', border: '1px dashed #ccc', margin: '20px' }}>
+            <span style={{ fontSize: '40px', display: 'block', marginBottom: '10px' }}>🏛️</span>
+            <p style={{ color: '#666', margin: 0 }}>No committee members found.</p>
+            <p style={{ color: '#999', fontSize: '14px', marginTop: '4px' }}>Click "➕ Add Committee Member" to build your team.</p>
+          </div>
+        ) : (
+          <div className="committee-edit-grid">
+            {committee.map(member => {
+              const imgError = false;
+              const photoValidation = member.photo ? validateImageUrl(member.photo) : null;
+              return (
+                <div className="committee-edit-card" key={member.id} style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => handleDeleteMember(member.id)}
+                    style={{
+                      position: 'absolute',
+                      top: '12px',
+                      right: '12px',
+                      background: 'rgba(225, 112, 85, 0.1)',
+                      border: '1px solid rgba(225, 112, 85, 0.3)',
+                      borderRadius: '50%',
+                      width: '30px',
+                      height: '30px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '14px',
+                      zIndex: 2,
+                      color: '#e17055',
+                      transition: 'all 0.2s'
+                    }}
+                    title="Remove Member"
+                    onMouseEnter={e => { e.currentTarget.style.background = '#e17055'; e.currentTarget.style.color = '#fff'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(225, 112, 85, 0.1)'; e.currentTarget.style.color = '#e17055'; }}
+                  >
+                    🗑️
+                  </button>
+                  
+                  <div className="photo-section">
+                    {member.photo ? (
+                      <img
+                        src={getDirectImageUrl(member.photo)}
+                        alt={member.name}
+                        className="committee-photo"
+                        onError={(e) => {
+                          e.target.src = PLACEHOLDER_IMAGE;
+                        }}
+                      />
+                    ) : null}
+                    <div className="avatar-placeholder" style={member.photo && !imgError ? { display: 'none' } : {}}>
+                      {getInitials(member.name || member.position)}
+                    </div>
+                  </div>
+                  <div className="form-fields">
+                    <div style={{ marginBottom: '4px' }}>
+                      <span className="position-badge">{member.position || 'Member'}</span>
+                    </div>
+                    <label>
+                      Designation / Position
+                      <input
+                        value={member.position || ''}
+                        onChange={e => handleFieldChange(member.id, 'position', e.target.value)}
+                        placeholder="e.g. President, Vice President"
+                      />
+                    </label>
+                    <label>
+                      Name
+                      <input
+                        value={member.name || ''}
+                        onChange={e => handleFieldChange(member.id, 'name', e.target.value)}
+                        placeholder="Enter name"
+                      />
+                    </label>
+                    <label>
+                      Phone
+                      <input
+                        value={member.phone || ''}
+                        onChange={e => handleFieldChange(member.id, 'phone', e.target.value)}
+                        placeholder="Phone number"
+                      />
+                    </label>
+                    <label>
+                      Photo URL (Google Drive / Google Photos)
+                      <input
+                        value={member.photo || ''}
+                        onChange={e => handlePhotoChange(member.id, e.target.value)}
+                        placeholder="https://drive.google.com/... or https://photos.google.com/..."
+                      />
+                      {photoValidation && (
+                        <small style={{ color: photoValidation.type === 'drive' ? '#00B894' : photoValidation.type === 'photos' ? '#FDCB6E' : '#888', fontSize: '10px' }}>
+                          {photoValidation.message}
+                        </small>
+                      )}
+                    </label>
+                    <label>
+                      Address
+                      <input
+                        value={member.address || ''}
+                        onChange={e => handleFieldChange(member.id, 'address', e.target.value)}
+                        placeholder="Address"
+                      />
+                    </label>
                   </div>
                 </div>
-                <div className="form-fields">
-                  <span className="position-badge">{member.position}</span>
-                  <label>
-                    Name
-                    <input
-                      value={member.name}
-                      onChange={e => handleFieldChange(member.id, 'name', e.target.value)}
-                      placeholder="Enter name"
-                    />
-                  </label>
-                  <label>
-                    Phone
-                    <input
-                      value={member.phone}
-                      onChange={e => handleFieldChange(member.id, 'phone', e.target.value)}
-                      placeholder="Phone number"
-                    />
-                  </label>
-                  <label>
-                    Photo URL (Google Drive / Google Photos)
-                    <input
-                      value={member.photo || ''}
-                      onChange={e => handlePhotoChange(member.id, e.target.value)}
-                      placeholder="https://drive.google.com/... or https://photos.google.com/..."
-                    />
-                    {photoValidation && (
-                      <small style={{ color: photoValidation.type === 'drive' ? '#00B894' : photoValidation.type === 'photos' ? '#FDCB6E' : '#888', fontSize: '10px' }}>
-                        {photoValidation.message}
-                      </small>
-                    )}
-                  </label>
-                  <label>
-                    Address
-                    <input
-                      value={member.address}
-                      onChange={e => handleFieldChange(member.id, 'address', e.target.value)}
-                      placeholder="Address"
-                    />
-                  </label>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
         {/* Bottom Save Button */}
         <div style={{ padding: '16px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
           <button className="btn-primary" onClick={handleSaveCommittee} disabled={saving} style={{ padding: '12px 32px', fontSize: '15px' }}>

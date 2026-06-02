@@ -526,6 +526,21 @@ export function DataProvider({ children }) {
 		// NOTE: Committee updates are buffered locally. Use saveCommittee() to push to cloud.
 	}, []);
 
+	const addCommitteeMember = useCallback((member) => {
+		const m = validateCommittee(member);
+		setData(prev => ({
+			...prev,
+			committee: [...prev.committee, m]
+		}));
+	}, []);
+
+	const deleteCommitteeMember = useCallback((id) => {
+		setData(prev => ({
+			...prev,
+			committee: prev.committee.filter(c => c.id !== id)
+		}));
+	}, []);
+
 	const saveCommittee = useCallback(async () => {
 		return saveAndVerify(data);
 	}, [data, saveAndVerify]);
@@ -672,7 +687,7 @@ export function DataProvider({ children }) {
 		members: data.members, addMember, updateMember,
 		collections: data.collections, addCollection, updateCollection,
 		expenditure: data.expenditure, addExpenditure, updateExpenditure,
-		committee: data.committee, updateCommittee, saveCommittee,
+		committee: data.committee, updateCommittee, saveCommittee, addCommitteeMember, deleteCommitteeMember,
 		notifications: data.notifications, addNotification, updateNotification,
 		gallery: data.gallery, addGalleryAlbum, updateGalleryAlbum,
 		addPhotoToAlbum,

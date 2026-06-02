@@ -166,29 +166,11 @@ function Home() {
           <span className="ancient-label">SAMAJ STATISTICS</span>
           <h2>Samaj Overview</h2>
         </div>
-        <div className="stats-grid">
-          <div className="stat-card premium-stat">
+        <div className="stats-grid" style={{ justifyContent: 'center' }}>
+          <div className="stat-card premium-stat" style={{ minWidth: '220px' }}>
             <div className="stat-icon-wrapper">👨‍👩‍👧‍👦</div>
             <span className="stat-number"><AnimatedNumber value={members.length} /></span>
             <span className="stat-label">Total Families</span>
-            <div className="stat-shine"></div>
-          </div>
-          <div className="stat-card premium-stat">
-            <div className="stat-icon-wrapper">💰</div>
-            <span className="stat-number">₹<AnimatedNumber value={totalCollections} /></span>
-            <span className="stat-label">Total Collection</span>
-            <div className="stat-shine"></div>
-          </div>
-          <div className="stat-card premium-stat">
-            <div className="stat-icon-wrapper">📊</div>
-            <span className="stat-number">₹<AnimatedNumber value={totalExpenditure} /></span>
-            <span className="stat-label">Total Expense</span>
-            <div className="stat-shine"></div>
-          </div>
-          <div className="stat-card premium-stat">
-            <div className="stat-icon-wrapper">🏦</div>
-            <span className="stat-number">₹<AnimatedNumber value={balance} /></span>
-            <span className="stat-label">Balance</span>
             <div className="stat-shine"></div>
           </div>
         </div>
