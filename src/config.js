@@ -15,10 +15,11 @@ export const ADMIN_PIN = '1234';
 // 5. Copy the Web App URL here
 export const CLOUD_URL = 'https://script.google.com/macros/s/AKfycbz_8gmgc2BlOtt_W5lJbMUigSQEOSJIwSUjnkKpxJxSedZjppS4EpBFTW1sspV1_SudWg/exec';
 
-// Sync Configuration - Optimized for performance
-export const SYNC_INTERVAL = 15000; // 15 seconds for reliable multi-device sync
-export const INITIAL_LOAD_DELAY = 500; // Faster initial load
+// Sync Configuration - Cloud-First Architecture
+export const SYNC_INTERVAL = 15000; // 15 seconds polling for cloud changes
+export const INITIAL_LOAD_DELAY = 300; // Fast initial load
 export const MAX_RETRY_ATTEMPTS = 5; // Max retries for failed syncs
+export const FETCH_TIMEOUT = 20000; // 20 second timeout for cloud fetch
 
 // App Version
 export const APP_VERSION = '1.0.0';

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../DataContext';
 import { useToast } from '../components/Toast';
-import { getDirectImageUrl, PLACEHOLDER_IMAGE } from '../utils';
+import { getDirectImageUrl, validateImageUrl, PLACEHOLDER_IMAGE } from '../utils';
 import Modal from '../components/Modal';
 import PDFExport from '../components/PDFExport';
 import { APP_VERSION } from '../config';
@@ -59,7 +59,7 @@ function getMonthPaymentStatus(members, collections, month, year) {
 
 // ===== DASHBOARD SECTION =====
 function DashboardSection() {
-  const { members, collections, expenditure, settings, setData } = useData();
+  const { members, collections, expenditure, settings, setData, bulkAddCollections, saving } = useData();
   const { addToast } = useToast();
 
   const safeParseDate = (dateStr) => {
@@ -78,17 +78,17 @@ function DashboardSection() {
   const paidCount = monthStatus.filter(m => m.paid).length;
   const unpaidCount = monthStatus.filter(m => !m.paid).length;
 
-  const markAllPaid = () => {
+  const markAllPaid = async () => {
     if (unpaidCount === 0) {
       addToast('All members already paid!', 'info');
       return;
     }
     if (window.confirm(`Mark all ${unpaidCount} pending members as paid for ${MONTHS[currentMonth]}?`)) {
-      const newCollections = [...collections];
+      const newEntries = [];
       let i = 0;
       monthStatus.forEach(m => {
         if (!m.paid) {
-          newCollections.push({
+          newEntries.push({
             id: Date.now() + i++,
             memberId: m.id,
             memberName: m.name,
@@ -99,8 +99,9 @@ function DashboardSection() {
           });
         }
       });
-      setData(prev => ({ ...prev, collections: newCollections }));
-      addToast('All members marked as paid!', 'success');
+      const success = await bulkAddCollections(newEntries);
+      if (success) addToast('All members marked as paid & saved to cloud!', 'success');
+      else addToast('Failed to save to cloud!', 'danger');
     }
   };
 
@@ -255,7 +256,7 @@ function DashboardSection() {
 
 // ===== MEMBERS SECTION =====
 function MembersSection() {
-  const { members, addMember, updateMember, deleteMember, settings } = useData();
+  const { members, addMember, updateMember, settings, saving } = useData();
   const { addToast } = useToast();
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -293,28 +294,25 @@ function MembersSection() {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) {
       addToast('Name is required!', 'danger');
       return;
     }
+    let success;
     if (editId) {
-      updateMember(editId, form);
-      addToast('Member updated successfully!', 'success');
+      success = await updateMember(editId, form);
+      if (success) addToast('Member updated & saved to cloud!', 'success');
     } else {
-      addMember(form);
-      addToast('Member added successfully!', 'success');
+      success = await addMember(form);
+      if (success) addToast('Member added & saved to cloud!', 'success');
     }
+    if (!success) addToast('Failed to save to cloud!', 'danger');
     setShowModal(false);
     resetForm();
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure? This member will be deleted!')) {
-      deleteMember(id);
-      addToast('Member deleted', 'info');
-    }
-  };
+  // Delete removed — only allowed from Google Sheets directly
 
   return (
     <div className="fade-in">
@@ -340,7 +338,7 @@ function MembersSection() {
             <table>
               <thead>
                 <tr>
-                  <th>#</th><th>Name</th><th>Father</th><th>Phone</th><th>Address</th><th>Occupation</th><th>Monthly Fee</th><th>Actions</th>
+                  <th>#</th><th>Name</th><th>Father</th><th>Phone</th><th>Address</th><th>Occupation</th><th>Monthly Fee</th><th>Edit</th>
                 </tr>
               </thead>
               <tbody>
@@ -354,8 +352,7 @@ function MembersSection() {
                     <td>{m.occupation || '-'}</td>
                     <td>₹{Number(m.monthlyFee).toLocaleString('en-IN')}</td>
                     <td>
-                      <button onClick={() => openEdit(m)} className="btn-action btn-edit">Edit</button>
-                      <button onClick={() => handleDelete(m.id)} className="btn-action btn-delete">Delete</button>
+                      <button onClick={() => openEdit(m)} className="btn-action btn-edit">✏️ Edit</button>
                     </td>
                   </tr>
                 ))}
@@ -398,7 +395,7 @@ function MembersSection() {
 
 // ===== COLLECTIONS SECTION =====
 function CollectionsSection() {
-  const { collections, members, addCollection, updateCollection, deleteCollection } = useData();
+  const { collections, members, addCollection, updateCollection } = useData();
   const { addToast } = useToast();
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
   const [filterYear, setFilterYear] = useState(new Date().getFullYear());
@@ -437,7 +434,7 @@ function CollectionsSection() {
 
   const monthlyTotal = filtered.reduce((s, c) => s + Number(c.amount || 0), 0);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.memberId && !form.memberName) {
       addToast('Please select a member or enter name!', 'danger');
       return;
@@ -446,23 +443,20 @@ function CollectionsSection() {
       addToast('Please enter amount!', 'danger');
       return;
     }
+    let success;
     if (editId) {
-      updateCollection(editId, form);
-      addToast('Payment updated successfully!', 'success');
+      success = await updateCollection(editId, form);
+      if (success) addToast('Payment updated & saved to cloud!', 'success');
     } else {
-      addCollection(form);
-      addToast('Payment recorded successfully!', 'success');
+      success = await addCollection(form);
+      if (success) addToast('Payment recorded & saved to cloud!', 'success');
     }
+    if (!success) addToast('Failed to save to cloud!', 'danger');
     setShowModal(false);
     resetForm();
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Delete this collection?')) {
-      deleteCollection(id);
-      addToast('Payment deleted', 'info');
-    }
-  };
+  // Delete removed — only allowed from Google Sheets directly
 
   const selectMember = (memberId) => {
     const member = members.find(m => m.id === memberId);
@@ -504,7 +498,7 @@ function CollectionsSection() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>#</th><th>Date</th><th>Member</th><th>Amount</th><th>Source</th><th>Note</th><th>Actions</th></tr>
+                <tr><th>#</th><th>Date</th><th>Member</th><th>Amount</th><th>Source</th><th>Note</th><th>Edit</th></tr>
               </thead>
               <tbody>
                 {filtered.map((c, i) => (
@@ -516,8 +510,7 @@ function CollectionsSection() {
                     <td><span className="badge badge-gold">{c.source || 'Other'}</span></td>
                     <td>{c.note || '-'}</td>
                     <td>
-                      <button onClick={() => openEdit(c)} className="btn-action btn-edit">Edit</button>
-                      <button onClick={() => handleDelete(c.id)} className="btn-action btn-delete">Delete</button>
+                      <button onClick={() => openEdit(c)} className="btn-action btn-edit">✏️ Edit</button>
                     </td>
                   </tr>
                 ))}
@@ -593,7 +586,7 @@ function CollectionsSection() {
 
 // ===== EXPENDITURE SECTION =====
 function ExpenditureSection() {
-  const { expenditure, addExpenditure, updateExpenditure, deleteExpenditure } = useData();
+  const { expenditure, addExpenditure, updateExpenditure } = useData();
   const { addToast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -622,28 +615,25 @@ function ExpenditureSection() {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.amount || Number(form.amount) <= 0) {
       addToast('Please enter amount!', 'danger');
       return;
     }
+    let success;
     if (editId) {
-      updateExpenditure(editId, form);
-      addToast('Expense updated', 'success');
+      success = await updateExpenditure(editId, form);
+      if (success) addToast('Expense updated & saved to cloud!', 'success');
     } else {
-      addExpenditure(form);
-      addToast('Expense recorded', 'success');
+      success = await addExpenditure(form);
+      if (success) addToast('Expense recorded & saved to cloud!', 'success');
     }
+    if (!success) addToast('Failed to save to cloud!', 'danger');
     setShowModal(false);
     resetForm();
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Delete this expense?')) {
-      deleteExpenditure(id);
-      addToast('Expense deleted', 'info');
-    }
-  };
+  // Delete removed — only allowed from Google Sheets directly
 
   return (
     <div className="fade-in">
@@ -663,7 +653,7 @@ function ExpenditureSection() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>#</th><th>Date</th><th>Category</th><th>Amount</th><th>Description</th><th>Actions</th></tr>
+                <tr><th>#</th><th>Date</th><th>Category</th><th>Amount</th><th>Description</th><th>Edit</th></tr>
               </thead>
               <tbody>
                 {expenditure.sort((a, b) => {
@@ -678,8 +668,7 @@ function ExpenditureSection() {
                     <td><strong>₹{Number(e.amount).toLocaleString('en-IN')}</strong></td>
                     <td>{e.description || '-'}</td>
                     <td>
-                      <button onClick={() => openEdit(e)} className="btn-action btn-edit">Edit</button>
-                      <button onClick={() => handleDelete(e.id)} className="btn-action btn-delete">Delete</button>
+                      <button onClick={() => openEdit(e)} className="btn-action btn-edit">✏️ Edit</button>
                     </td>
                   </tr>
                 ))}
@@ -738,56 +727,61 @@ function ExpenditureSection() {
 
 // ===== GALLERY SECTION =====
 function GallerySection() {
-  const { gallery, addGalleryAlbum, updateGalleryAlbum, deleteGalleryAlbum, addPhotoToAlbum, removePhotoFromAlbum } = useData();
+  const { gallery, addGalleryAlbum, updateGalleryAlbum, addPhotoToAlbum } = useData();
   const { addToast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [editAlbum, setEditAlbum] = useState(null);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [newPhotoUrl, setNewPhotoUrl] = useState('');
+  const [urlStatus, setUrlStatus] = useState(null);
   const [form, setForm] = useState({ title: '', date: '', cover: '' });
 
   // Safe gallery with default
   const safeGallery = gallery || [];
   const totalPhotos = safeGallery.reduce((sum, album) => sum + (album.photos?.length || 0), 0);
 
-  const handleCreateAlbum = () => {
+  const handleCreateAlbum = async () => {
     if (!form.title.trim()) {
       addToast('Album title is required!', 'danger');
       return;
     }
-    addGalleryAlbum({
+    const success = await addGalleryAlbum({
       title: form.title,
       date: form.date || new Date().toLocaleDateString('en-IN'),
       cover: form.cover,
       photos: []
     });
-    addToast('Album created!', 'success');
+    if (success) addToast('Album created & saved to cloud!', 'success');
+    else addToast('Failed to save to cloud!', 'danger');
     setShowModal(false);
     setForm({ title: '', date: '', cover: '' });
   };
 
-  const handleUpdateAlbum = () => {
+  const handleUpdateAlbum = async () => {
     if (!editAlbum || !form.title.trim()) return;
-    updateGalleryAlbum(editAlbum.id, {
+    const success = await updateGalleryAlbum(editAlbum.id, {
       title: form.title,
       date: form.date,
       cover: form.cover
     });
-    addToast('Album updated!', 'success');
+    if (success) addToast('Album updated & saved to cloud!', 'success');
+    else addToast('Failed to save to cloud!', 'danger');
     setShowModal(false);
     setEditAlbum(null);
     setForm({ title: '', date: '', cover: '' });
   };
 
-  const handleAddPhoto = () => {
+  const handleAddPhoto = async () => {
     if (!newPhotoUrl.trim()) {
       addToast('Please enter photo URL!', 'danger');
       return;
     }
-    addPhotoToAlbum(selectedAlbum.id, newPhotoUrl);
-    addToast('Photo added!', 'success');
+    const success = await addPhotoToAlbum(selectedAlbum.id, newPhotoUrl);
+    if (success) addToast('Photo added & saved to cloud!', 'success');
+    else addToast('Failed to save to cloud!', 'danger');
     setNewPhotoUrl('');
+    setUrlStatus(null);
     setShowPhotoModal(false);
   };
 
@@ -803,12 +797,7 @@ function GallerySection() {
     setShowPhotoModal(true);
   };
 
-  const handleDeleteAlbum = (id) => {
-    if (window.confirm('Delete this album and all photos?')) {
-      deleteGalleryAlbum(id);
-      addToast('Album deleted', 'info');
-    }
-  };
+  // Delete removed — only allowed from Google Sheets directly
 
   return (
     <div className="fade-in">
@@ -862,9 +851,6 @@ function GallerySection() {
                     <button onClick={() => openEdit(album)} style={{ flex: 1, padding: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#ccc', fontSize: '11px', cursor: 'pointer' }}>
                       ✏️ Edit
                     </button>
-                    <button onClick={() => handleDeleteAlbum(album.id)} style={{ flex: 1, padding: '6px', background: 'rgba(225,112,85,0.2)', border: '1px solid rgba(225,112,85,0.4)', borderRadius: '6px', color: '#E17055', fontSize: '11px', cursor: 'pointer' }}>
-                      🗑️
-                    </button>
                   </div>
                 </div>
               </div>
@@ -908,19 +894,6 @@ function GallerySection() {
                       style={{ width: '100%', height: '180px', objectFit: 'cover' }}
                       onError={(e) => { e.target.src = PLACEHOLDER_IMAGE; }}
                     />
-                    <button
-                      onClick={() => {
-                        removePhotoFromAlbum(selectedAlbum.id, photo.id);
-                        addToast('Photo removed', 'info');
-                      }}
-                      style={{
-                        position: 'absolute', top: '8px', right: '8px',
-                        background: 'rgba(225,112,85,0.9)', border: 'none', borderRadius: '50%',
-                        width: '28px', height: '28px', cursor: 'pointer', color: 'white', fontSize: '14px'
-                      }}
-                    >
-                      ✕
-                    </button>
                   </div>
                 ))}
               </div>
@@ -972,22 +945,37 @@ function GallerySection() {
       </Modal>
 
       {/* Add Photo Modal */}
-      <Modal isOpen={showPhotoModal} onClose={() => { setShowPhotoModal(false); setNewPhotoUrl(''); }} title="Add Photo to Album">
+      <Modal isOpen={showPhotoModal} onClose={() => { setShowPhotoModal(false); setNewPhotoUrl(''); setUrlStatus(null); }} title="Add Photo to Album">
         <div className="modal-form">
           <p style={{ color: '#888', fontSize: '13px', marginBottom: '16px' }}>
-            Paste a Google Drive photo URL. You can add multiple photos one by one.
+            Paste a Google Drive or Google Photos URL. You can add multiple photos one by one.
           </p>
           <div className="form-group">
-            <label>Photo URL (Google Drive) *</label>
+            <label>Photo URL (Google Drive / Google Photos) *</label>
             <input
               value={newPhotoUrl}
-              onChange={e => setNewPhotoUrl(e.target.value)}
-              placeholder="https://drive.google.com/file/d/..."
+              onChange={e => {
+                setNewPhotoUrl(e.target.value);
+                if (e.target.value.trim()) {
+                  setUrlStatus(validateImageUrl(e.target.value));
+                } else {
+                  setUrlStatus(null);
+                }
+              }}
+              placeholder="https://drive.google.com/file/d/... or https://photos.google.com/..."
             />
+            {urlStatus && (
+              <small style={{ color: urlStatus.type === 'drive' ? '#00B894' : urlStatus.type === 'photos' ? '#FDCB6E' : '#888', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                {urlStatus.message}
+              </small>
+            )}
+            <small style={{ color: '#666', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+              💡 Tip: For Google Drive, right-click image → Get link → set "Anyone with link". For Google Photos, use sharing link.
+            </small>
           </div>
           <div className="modal-actions">
-            <button className="btn-secondary" onClick={() => { setShowPhotoModal(false); setNewPhotoUrl(''); }}>Cancel</button>
-            <button className="btn-primary" onClick={handleAddPhoto}>Add Photo</button>
+            <button className="btn-secondary" onClick={() => { setShowPhotoModal(false); setNewPhotoUrl(''); setUrlStatus(null); }}>Cancel</button>
+            <button className="btn-primary" onClick={handleAddPhoto}>💾 Save Photo to Cloud</button>
           </div>
         </div>
       </Modal>
@@ -1197,7 +1185,9 @@ function ReportsSection() {
 
 // ===== COMMITTEE SECTION =====
 function CommitteeSection() {
-  const { committee, updateCommittee } = useData();
+  const { committee, updateCommittee, saveCommittee, saving } = useData();
+  const { addToast } = useToast();
+  const [hasChanges, setHasChanges] = useState(false);
 
   const getInitials = (name) => {
     if (!name) return '?';
@@ -1206,25 +1196,21 @@ function CommitteeSection() {
 
   const handlePhotoChange = (id, url) => {
     updateCommittee(id, { photo: url });
+    setHasChanges(true);
   };
 
   const handleFieldChange = (id, field, value) => {
     updateCommittee(id, { [field]: value });
+    setHasChanges(true);
   };
 
-  const handleImageUpload = (id, e) => {
-    const file = e.target.files[0];
-    if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target && event.target.result) {
-          updateCommittee(id, { photo: event.target.result });
-        }
-      };
-      reader.onerror = () => {
-        alert('Error reading file. Please try again.');
-      };
-      reader.readAsDataURL(file);
+  const handleSaveCommittee = async () => {
+    const success = await saveCommittee();
+    if (success) {
+      addToast('Committee saved to cloud!', 'success');
+      setHasChanges(false);
+    } else {
+      addToast('Failed to save to cloud!', 'danger');
     }
   };
 
@@ -1233,11 +1219,20 @@ function CommitteeSection() {
       <div className="admin-card">
         <div className="admin-card-header">
           <h3>Committee Members</h3>
-          <p style={{ fontSize: '13px', color: '#888', margin: '8px 0 0' }}>Changes are saved automatically. You can also upload photo directly.</p>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {hasChanges && <span style={{ fontSize: '12px', color: '#FDCB6E' }}>⚠️ Unsaved changes</span>}
+            <button className="btn-primary" onClick={handleSaveCommittee} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {saving ? '🔄 Saving...' : '💾 Save Committee to Cloud'}
+            </button>
+          </div>
         </div>
+        <p style={{ fontSize: '13px', color: '#888', padding: '0 16px', marginBottom: '8px' }}>
+          Edit fields below, then click "💾 Save Committee to Cloud" to push changes. Use Google Drive or Google Photos links for photos.
+        </p>
         <div className="committee-edit-grid">
           {committee.map(member => {
-            const imgError = false; // Simplified - removed useState from map
+            const imgError = false;
+            const photoValidation = member.photo ? validateImageUrl(member.photo) : null;
             return (
               <div className="committee-edit-card" key={member.id}>
                 <div className="photo-section">
@@ -1274,12 +1269,17 @@ function CommitteeSection() {
                     />
                   </label>
                   <label>
-                    Photo URL (Google Photos/Drive)
+                    Photo URL (Google Drive / Google Photos)
                     <input
                       value={member.photo || ''}
                       onChange={e => handlePhotoChange(member.id, e.target.value)}
-                      placeholder="https://photos.google.com/... or https://drive.google.com/..."
+                      placeholder="https://drive.google.com/... or https://photos.google.com/..."
                     />
+                    {photoValidation && (
+                      <small style={{ color: photoValidation.type === 'drive' ? '#00B894' : photoValidation.type === 'photos' ? '#FDCB6E' : '#888', fontSize: '10px' }}>
+                        {photoValidation.message}
+                      </small>
+                    )}
                   </label>
                   <label>
                     Address
@@ -1294,6 +1294,12 @@ function CommitteeSection() {
             );
           })}
         </div>
+        {/* Bottom Save Button */}
+        <div style={{ padding: '16px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <button className="btn-primary" onClick={handleSaveCommittee} disabled={saving} style={{ padding: '12px 32px', fontSize: '15px' }}>
+            {saving ? '🔄 Saving to Cloud...' : '💾 Save All Committee Changes to Cloud'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1301,7 +1307,7 @@ function CommitteeSection() {
 
 // ===== SETTINGS SECTION =====
 function SettingsSection() {
-  const { settings, updateSetting, syncToGoogleSheet, loadFromGoogleSheet, exportJSON, importJSON, syncStatus, syncError, syncLastTime, pendingCount, clearSyncQueue } = useData();
+  const { settings, updateSetting, syncToGoogleSheet, loadFromGoogleSheet, exportJSON, importJSON, syncStatus, syncError, syncLastTime, saving, saveSettings, members, collections, expenditure } = useData();
   const { addToast } = useToast();
   const [form, setForm] = useState({
     appName: settings.appName,
@@ -1310,11 +1316,16 @@ function SettingsSection() {
     sheetUrl: settings.sheetUrl
   });
 
-  const handleSaveSettings = () => {
+  const handleSaveSettings = async () => {
     if (form.appName) updateSetting('appName', form.appName);
     if (form.location) updateSetting('location', form.location);
     updateSetting('monthlyFee', Number(form.monthlyFee) || 100);
-    addToast('Settings saved successfully!', 'success');
+    // Need a small delay for state to update, then save
+    setTimeout(async () => {
+      const success = await saveSettings();
+      if (success) addToast('Settings saved to cloud!', 'success');
+      else addToast('Failed to save to cloud!', 'danger');
+    }, 100);
   };
 
   const handleImportFile = (e) => {
@@ -1559,31 +1570,22 @@ function doGet(e) {
                 </div>
               </div>
               {/* Sync Status Display */}
-              <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '10px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' || syncStatus === 'loading' ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${syncStatus === 'syncing' ? 'rgba(253,203,110,0.4)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.4)' : syncStatus === 'error' || syncStatus === 'loading' ? 'rgba(225,112,85,0.4)' : 'rgba(255,255,255,0.1)'}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '600', color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' || syncStatus === 'loading' ? '#E17055' : '#aaa' }}>
-                  <span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : syncStatus === 'loading' ? '⏳' : '☁️'}</span>
+              <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '10px', background: syncStatus === 'syncing' || saving ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${syncStatus === 'syncing' || saving ? 'rgba(253,203,110,0.4)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.4)' : syncStatus === 'error' ? 'rgba(225,112,85,0.4)' : 'rgba(255,255,255,0.1)'}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '600', color: syncStatus === 'syncing' || saving ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' ? '#E17055' : '#aaa' }}>
+                  <span>{saving ? '💾' : syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : syncStatus === 'loading' ? '⏳' : '☁️'}</span>
                   <span>
-                    {syncStatus === 'syncing' ? 'Syncing to cloud...' :
-                      syncStatus === 'synced' ? 'All devices in sync' :
-                        syncStatus === 'error' ? 'Sync failed!' :
-                          syncStatus === 'loading' ? 'Loading from cloud...' :
-                            'Cloud connected'}
+                    {saving ? 'Saving to Google Sheets...' :
+                      syncStatus === 'syncing' ? 'Syncing to cloud...' :
+                        syncStatus === 'synced' ? 'All data synced to Google Sheets ✓' :
+                          syncStatus === 'error' ? 'Sync error!' :
+                            syncStatus === 'loading' ? 'Loading from cloud...' :
+                              'Cloud connected'}
                   </span>
-                  {pendingCount > 0 && (
-                    <span style={{ marginLeft: '8px', padding: '2px 8px', background: 'rgba(225,112,85,0.3)', borderRadius: '12px', fontSize: '12px' }}>
-                      {pendingCount} pending
-                    </span>
-                  )}
                 </div>
                 {syncError && <div style={{ marginTop: '6px', fontSize: '12px', color: '#E17055' }}>Error: {syncError}</div>}
-                {pendingCount > 0 && (
-                  <button
-                    onClick={syncToGoogleSheet}
-                    style={{ marginTop: '8px', padding: '6px 12px', background: 'rgba(225,112,85,0.2)', border: '1px solid rgba(225,112,85,0.5)', borderRadius: '6px', color: '#E17055', fontSize: '12px', cursor: 'pointer' }}
-                  >
-                    Retry Sync Now
-                  </button>
-                )}
+                <div style={{ marginTop: '8px', fontSize: '11px', color: '#888', lineHeight: '1.5' }}>
+                  ℹ️ Data is saved directly to Google Sheets. To delete data, go to Google Sheets directly and delete rows manually.
+                </div>
               </div>
             </div>
           )}
@@ -1661,13 +1663,13 @@ function doGet(e) {
 
 // ===== NOTIFICATIONS SECTION =====
 function NotificationsSection() {
-  const { notifications, addNotification, updateNotification, deleteNotification } = useData();
+  const { notifications, addNotification, updateNotification } = useData();
   const { addToast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ title: '', text: '', date: new Date().toLocaleDateString('en-IN') });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.title.trim()) {
       addToast('Title is required!', 'danger');
       return;
@@ -1676,13 +1678,15 @@ function NotificationsSection() {
       addToast('Message is required!', 'danger');
       return;
     }
+    let success;
     if (editId) {
-      updateNotification(editId, form);
-      addToast('Notice updated successfully!', 'success');
+      success = await updateNotification(editId, form);
+      if (success) addToast('Notice updated & saved to cloud!', 'success');
     } else {
-      addNotification(form);
-      addToast('Notice posted successfully!', 'success');
+      success = await addNotification(form);
+      if (success) addToast('Notice posted & saved to cloud!', 'success');
     }
+    if (!success) addToast('Failed to save to cloud!', 'danger');
     setShowModal(false);
     setForm({ title: '', text: '', date: new Date().toLocaleDateString('en-IN') });
     setEditId(null);
@@ -1694,17 +1698,13 @@ function NotificationsSection() {
     setShowModal(true);
   };
 
-  const handleToggle = (notif) => {
-    updateNotification(notif.id, { active: !notif.active });
-    addToast(notif.active ? 'Notice hidden from site' : 'Notice shown on site', 'info');
+  const handleToggle = async (notif) => {
+    const success = await updateNotification(notif.id, { active: !notif.active });
+    if (success) addToast(notif.active ? 'Notice hidden & saved!' : 'Notice published & saved!', 'info');
+    else addToast('Failed to save to cloud!', 'danger');
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Delete this notification?')) {
-      deleteNotification(id);
-      addToast('Notice deleted', 'info');
-    }
-  };
+  // Delete removed — only allowed from Google Sheets directly
 
   const activeNotifs = notifications.filter(n => n.active);
   const inactiveNotifs = notifications.filter(n => !n.active);
@@ -1738,7 +1738,6 @@ function NotificationsSection() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '100px' }}>
                   <button onClick={() => handleToggle(notif)} className="btn-action" style={{ background: '#f1f2f6', color: '#57606f', border: '1px solid #dfe4ea', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>👁️ Hide</button>
                   <button onClick={() => handleEdit(notif)} className="btn-action" style={{ background: 'var(--gold)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>✏️ Edit</button>
-                  <button onClick={() => handleDelete(notif.id)} className="btn-action" style={{ background: 'var(--danger)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>🗑️ Delete</button>
                 </div>
               </div>
             ))}
@@ -1764,7 +1763,6 @@ function NotificationsSection() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '100px' }}>
                   <button onClick={() => handleToggle(notif)} className="btn-action" style={{ background: '#00B894', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>📢 Publish</button>
-                  <button onClick={() => handleDelete(notif.id)} className="btn-action" style={{ background: 'var(--danger)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>🗑️ Delete</button>
                 </div>
               </div>
             ))}
@@ -1814,7 +1812,7 @@ function NotificationsSection() {
 // ===== MAIN ADMIN COMPONENT =====
 function Admin() {
   const navigate = useNavigate();
-  const { syncStatus, settings, loadFromGoogleSheet, pendingCount, syncToGoogleSheet, members, collections, expenditure } = useData();
+  const { syncStatus, settings, loadFromGoogleSheet, syncToGoogleSheet, members, collections, expenditure, saving, initialLoadDone } = useData();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -1912,23 +1910,15 @@ function Admin() {
         <div className="admin-sidebar-footer">
           {/* Cloud Sync Status Indicator */}
           <>
-            <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' || pendingCount > 0 ? 'rgba(225,112,85,0.15)' : 'rgba(255,255,255,0.05)' }}>
-              <span>{syncStatus === 'syncing' ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' || pendingCount > 0 ? '❌' : '☁️'}</span>
-              <span style={{ color: syncStatus === 'syncing' ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' || pendingCount > 0 ? '#E17055' : 'rgba(255,255,255,0.5)' }}>
-                {syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Cloud synced' : syncStatus === 'error' ? 'Sync failed' : syncStatus === 'loading' ? 'Loading...' : pendingCount > 0 ? `${pendingCount} pending` : 'Cloud connected'}
+            <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' || saving ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' ? 'rgba(225,112,85,0.15)' : syncStatus === 'loading' ? 'rgba(108,92,231,0.15)' : 'rgba(255,255,255,0.05)' }}>
+              <span>{syncStatus === 'syncing' || saving ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : syncStatus === 'loading' ? '⏳' : '☁️'}</span>
+              <span style={{ color: syncStatus === 'syncing' || saving ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' ? '#E17055' : syncStatus === 'loading' ? '#a29bfe' : 'rgba(255,255,255,0.5)' }}>
+                {saving ? 'Saving to cloud...' : syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Cloud synced ✓' : syncStatus === 'error' ? 'Sync error' : syncStatus === 'loading' ? 'Loading from cloud...' : 'Cloud ready'}
               </span>
             </div>
-            {pendingCount > 0 && (
-              <button
-                onClick={syncToGoogleSheet}
-                style={{ marginBottom: '12px', padding: '6px 10px', fontSize: '11px', background: 'rgba(225,112,85,0.2)', border: '1px solid rgba(225,112,85,0.4)', borderRadius: '6px', color: '#E17055', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-              >
-                🔄 Retry Sync
-              </button>
-            )}
             <button
               onClick={loadFromGoogleSheet}
-              style={{ marginBottom: '12px', padding: '6px 10px', fontSize: '11px', background: 'rgba(0,184,148,0.2)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '6px', color: '#00B894', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              style={{ marginBottom: '12px', padding: '6px 10px', fontSize: '11px', background: 'rgba(0,184,148,0.2)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '6px', color: '#00B894', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', width: '100%' }}
             >
               🔄 Refresh from Cloud
             </button>

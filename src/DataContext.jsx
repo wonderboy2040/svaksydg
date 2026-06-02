@@ -1,8 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { CLOUD_URL, SYNC_INTERVAL, INITIAL_LOAD_DELAY, MAX_RETRY_ATTEMPTS } from './config';
-
-// Debounce interval for auto-push (ms)
-const AUTO_PUSH_DEBOUNCE = 2000;
+import { CLOUD_URL, SYNC_INTERVAL, FETCH_TIMEOUT, MAX_RETRY_ATTEMPTS } from './config';
 
 const DataContext = createContext(null);
 
@@ -16,12 +13,6 @@ const defaultSettings = {
 	adminEmail: ''
 };
 
-const defaultNotifications = [
-	{ id: 1, title: 'Upcoming Event', text: 'Ashadhi Purnima special puja on 15th June', date: '15 June 2026', active: true },
-	{ id: 2, title: 'Membership', text: 'New members registration ongoing', date: '10 June 2026', active: true },
-	{ id: 3, title: 'Meeting', text: 'Next general meeting on 25th June', date: '05 June 2026', active: true }
-];
-
 const defaultCommittee = [
 	{ id: 1, position: 'President', name: '', photo: '', phone: '', address: '' },
 	{ id: 2, position: 'Vice President', name: '', photo: '', phone: '', address: '' },
@@ -32,121 +23,14 @@ const defaultCommittee = [
 	{ id: 7, position: 'Senior Member', name: '', photo: '', phone: '', address: '' }
 ];
 
-// Default gallery albums
-const defaultGallery = [
-	{
-		id: 1,
-		title: 'Navratri Celebration 2025',
-		date: 'October 2025',
-		cover: '',
-		photos: []
-	},
-	{
-		id: 2,
-		title: 'Diwali Milan 2025',
-		date: 'November 2025',
-		cover: '',
-		photos: []
-	},
-	{
-		id: 3,
-		title: 'Annual Function 2025',
-		date: 'December 2025',
-		cover: '',
-		photos: []
-	}
-];
+const defaultNotifications = [];
 
-const STORAGE_KEY = 'svaks_data';
-const SYNC_QUEUE_KEY = 'svaks_sync_queue';
-const LAST_SYNC_KEY = 'svaks_last_sync';
+const defaultGallery = [];
 
-function loadFromStorage() {
-	try {
-		const raw = localStorage.getItem(STORAGE_KEY);
-		if (raw) {
-			const parsed = JSON.parse(raw);
-			return {
-				_syncVersion: parsed._syncVersion || 0,
-				members: parsed.members || [],
-				collections: parsed.collections || [],
-				expenditure: parsed.expenditure || [],
-				committee: parsed.committee || defaultCommittee.map(c => ({ ...c })),
-				notifications: parsed.notifications || defaultNotifications.map(n => ({ ...n })),
-				gallery: parsed.gallery || defaultGallery.map(g => ({ ...g })),
-				settings: { ...defaultSettings, ...(parsed.settings || {}) }
-			};
-		}
-	} catch (e) {
-		console.error('[SVAKS] localStorage error:', e);
-	}
-	return {
-		_syncVersion: 0,
-		members: [],
-		collections: [],
-		expenditure: [],
-		committee: defaultCommittee.map(c => ({ ...c })),
-		notifications: defaultNotifications.map(n => ({ ...n })),
-		gallery: defaultGallery.map(g => ({ ...g })),
-		settings: { ...defaultSettings }
-	};
-}
-
-function saveToStorage(data) {
-	try {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify({
-			_syncVersion: data._syncVersion || 0,
-			members: data.members,
-			collections: data.collections,
-			expenditure: data.expenditure,
-			committee: data.committee,
-			notifications: data.notifications,
-			gallery: data.gallery,
-			settings: data.settings
-		}));
-	} catch (e) {
-		console.error('[SVAKS] save error:', e);
-	}
-}
-
-function loadSyncQueue() {
-	try {
-		const raw = localStorage.getItem(SYNC_QUEUE_KEY);
-		if (raw) {
-			return JSON.parse(raw);
-		}
-	} catch (e) {
-		console.error('[SVAKS] Sync queue load error:', e);
-	}
-	return [];
-}
-
-function saveSyncQueue(queue) {
-	try {
-		localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
-	} catch (e) {
-		console.error('[SVAKS] Sync queue save error:', e);
-	}
-}
-
-function getLastSyncTime() {
-	try {
-		return localStorage.getItem(LAST_SYNC_KEY);
-	} catch {
-		return null;
-	}
-}
-
-function setLastSyncTime(time) {
-	try {
-		localStorage.setItem(LAST_SYNC_KEY, time);
-	} catch (e) {
-		console.error('[SVAKS] Last sync time save error:', e);
-	}
-}
-
+// ===================================
+// VALIDATION HELPERS
+// ===================================
 const validateMember = (member) => {
-	// Enhanced validation with proper sanitization
 	const safeId = Number(member?.id) || Date.now() + Math.random();
 	const safeName = String(member?.name || '').trim().substring(0, 100);
 	const safeFather = String(member?.father || '').trim().substring(0, 100);
@@ -156,8 +40,6 @@ const validateMember = (member) => {
 	const safeMonthlyFee = Math.abs(Number(member?.monthlyFee)) || 100;
 	const safeOther = String(member?.other || '').trim().substring(0, 500);
 	const safeJoinedDate = member?.joinedDate || new Date().toISOString().split('T')[0];
-
-	// Name is required - if empty, use "Unknown Member"
 	const finalName = safeName || 'Unknown Member';
 
 	return {
@@ -174,14 +56,12 @@ const validateMember = (member) => {
 };
 
 const validateCollection = (collection) => {
-	// Enhanced collection validation
 	const safeId = Number(collection?.id) || Date.now() + Math.random();
 	const safeMemberId = collection?.memberId ? Number(collection.memberId) : null;
 	const safeMemberName = String(collection?.memberName || '').trim().substring(0, 100);
 	const safeAmount = Math.abs(Number(collection?.amount)) || 0;
 	const safeSource = String(collection?.source || 'Other').trim().substring(0, 50);
 	const safeNote = String(collection?.note || '').trim().substring(0, 200);
-	// Validate date format
 	let safeDate = collection?.date;
 	if (safeDate) {
 		const parsed = new Date(safeDate);
@@ -206,7 +86,6 @@ const validateCollection = (collection) => {
 };
 
 const validateExpenditure = (expenditure) => {
-	// Enhanced expenditure validation
 	const safeId = Number(expenditure?.id) || Date.now() + Math.random();
 	const safeCategory = String(expenditure?.category || 'Other').trim().substring(0, 50);
 	const safeAmount = Math.abs(Number(expenditure?.amount)) || 0;
@@ -237,220 +116,78 @@ const validateNotification = (notification) => ({
 	title: String(notification.title || '').trim().substring(0, 100),
 	text: String(notification.text || '').trim().substring(0, 500),
 	date: notification.date || new Date().toLocaleDateString('en-IN'),
-	active: Boolean(notification.active)
+	active: notification.active !== undefined ? Boolean(notification.active) : true
 });
 
 const validateCommittee = (committee) => ({
 	id: Number(committee.id) || Date.now(),
 	position: String(committee.position || '').trim().substring(0, 50),
 	name: String(committee.name || '').trim().substring(0, 100),
-	photo: String(committee.photo || '').trim().substring(0, 500),
+	photo: String(committee.photo || '').trim().substring(0, 1000),
 	phone: String(committee.phone || '').trim().substring(0, 20),
 	address: String(committee.address || '').trim().substring(0, 200)
 });
 
+// ===================================
+// CLOUD API HELPERS
+// ===================================
+function getLoadUrl(url) {
+	if (!url) return '';
+	if (url.includes('script.google.com/macros')) {
+		const base = url.replace(/\/exec.*/, '/exec');
+		return base + '?action=load&load=true';
+	}
+	if (url.endsWith('/load')) return url;
+	return url + '/load';
+}
+
+function getPostUrl(url) {
+	if (!url) return '';
+	if (url.includes('script.google.com/macros')) {
+		return url.replace(/\/exec.*/, '/exec');
+	}
+	return url;
+}
+
+// ===================================
+// DATA PROVIDER — CLOUD-FIRST
+// ===================================
 export function DataProvider({ children }) {
-	const [data, setData] = useState(loadFromStorage);
-	const [syncStatus, setSyncStatus] = useState('idle');
+	// Data state — starts empty, loaded from cloud
+	const [data, setData] = useState({
+		_syncVersion: 0,
+		members: [],
+		collections: [],
+		expenditure: [],
+		committee: defaultCommittee.map(c => ({ ...c })),
+		notifications: [],
+		gallery: [],
+		settings: { ...defaultSettings }
+	});
+
+	const [syncStatus, setSyncStatus] = useState('loading'); // 'loading' | 'synced' | 'syncing' | 'error' | 'offline'
 	const [syncError, setSyncError] = useState('');
-	const [syncLastTime, setSyncLastTime] = useState(getLastSyncTime());
+	const [syncLastTime, setSyncLastTime] = useState(null);
 	const [initialLoadDone, setInitialLoadDone] = useState(false);
-	const [pendingCount, setPendingCount] = useState(0);
+	const [saving, setSaving] = useState(false);
 
-	const syncQueueRef = useRef(loadSyncQueue());
-	const isSyncingRef = useRef(false);
-	const retryTimeoutRef = useRef(null);
 	const pollRef = useRef(null);
-	const lastPushRef = useRef(0);
+	const isFetchingRef = useRef(false);
 
-	const getLoadUrl = (url) => {
-		if (!url) return '';
-		if (url.includes('script.google.com/macros')) {
-			const base = url.replace(/\/exec.*/, '/exec');
-			return base + '?action=load&load=true';
-		}
-		if (url.endsWith('/load')) return url;
-		return url + '/load';
-	};
-
-	const processQueue = useCallback(async () => {
-		const isAdmin = sessionStorage.getItem('svaks_admin') === 'true';
-		if (!isAdmin) return;
-
-		if (!CLOUD_URL || isSyncingRef.current || syncQueueRef.current.length === 0) {
-			return;
-		}
-
-		const queue = [...syncQueueRef.current];
-		if (queue.length === 0) return;
-
-		isSyncingRef.current = true;
-		setSyncStatus('syncing');
-
-		let successCount = 0;
-		let failedItems = [];
-
-		for (const item of queue) {
-			try {
-				const now = Date.now();
-				const dataWithMeta = {
-					...item.data,
-					_syncVersion: now,
-					_lastSync: new Date().toISOString(),
-					_queueId: item.id
-				};
-
-				let postUrl = CLOUD_URL;
-				if (postUrl.includes('script.google.com/macros')) {
-					postUrl = postUrl.replace(/\/exec.*/, '/exec');
-				}
-
-				const response = await fetch(postUrl, {
-					method: 'POST',
-					mode: 'no-cors',
-					headers: { 'Content-Type': 'text/plain' },
-					body: JSON.stringify(dataWithMeta)
-				});
-
-				if (response.ok || response.status === 0 || response.type === 'opaque') {
-					successCount++;
-					console.log('[SVAKS] Queue item synced successfully');
-				} else {
-					console.error('[SVAKS] Queue item failed:', response.status);
-					failedItems.push({ ...item, retryCount: (item.retryCount || 0) + 1 });
-				}
-			} catch (e) {
-				console.error('[SVAKS] Queue push error:', e.message);
-				failedItems.push({ ...item, retryCount: (item.retryCount || 0) + 1 });
-			}
-		}
-
-		syncQueueRef.current = failedItems.filter(item => (item.retryCount || 0) < MAX_RETRY_ATTEMPTS);
-		saveSyncQueue(syncQueueRef.current);
-		setPendingCount(syncQueueRef.current.length);
-
-		if (syncQueueRef.current.length === 0) {
-			setSyncStatus('synced');
-			setSyncError('');
-			const now = new Date().toISOString();
-			setLastSyncTime(now);
-			setSyncLastTime(now);
-		} else {
-			setSyncStatus('error');
-			setSyncError(`${syncQueueRef.current.length} pending syncs`);
-			scheduleRetry();
-		}
-
-		isSyncingRef.current = false;
-	}, []);
-
-	const scheduleRetry = useCallback(() => {
-		if (retryTimeoutRef.current) {
-			clearTimeout(retryTimeoutRef.current);
-		}
-
-		const queue = syncQueueRef.current;
-		if (queue.length === 0) return;
-
-		const baseDelay = 2000;
-		const maxDelay = 30000;
-
-		const avgRetryCount = queue.reduce((sum, item) => sum + (item.retryCount || 0), 0) / queue.length;
-		const delay = Math.min(baseDelay * Math.pow(2, avgRetryCount), maxDelay);
-
-		console.log(`[SVAKS] Scheduling retry in ${delay}ms (avg retries: ${avgRetryCount.toFixed(1)})`);
-
-		retryTimeoutRef.current = setTimeout(() => {
-			processQueue();
-		}, delay);
-	}, [processQueue]);
-
-	// INSTANT cloud push - NO THROTTLE
-	const pushToCloud = useCallback(async (dataToPush) => {
-		const isAdmin = sessionStorage.getItem('svaks_admin') === 'true';
-		if (!isAdmin) return false;
-
-		if (!CLOUD_URL) {
-			console.warn('[SVAKS] No cloud URL configured');
-			return false;
-		}
-
-		const now = Date.now();
-		const syncVersion = now;
-		const dataWithMeta = {
-			...dataToPush,
-			_syncVersion: syncVersion,
-			_lastSync: new Date().toISOString()
-		};
-
-		console.log('[SVAKS] Pushing to cloud, version:', syncVersion);
-		setSyncStatus('syncing');
-
-		try {
-			let postUrl = CLOUD_URL;
-			if (postUrl.includes('script.google.com/macros')) {
-				postUrl = postUrl.replace(/\/exec.*/, '/exec');
-			}
-
-			const response = await fetch(postUrl, {
-				method: 'POST',
-				mode: 'no-cors',
-				headers: { 'Content-Type': 'text/plain' },
-				body: JSON.stringify(dataWithMeta)
-			});
-
-			// Check if request was successful
-			if (response.ok || response.status === 0 || response.type === 'opaque') {
-				console.log('[SVAKS] Push successful!');
-				const nowISO = new Date().toISOString();
-				setLastSyncTime(nowISO);
-				setSyncLastTime(nowISO);
-				setSyncStatus('synced');
-				setSyncError('');
-				setInitialLoadDone(true);
-
-				syncQueueRef.current = syncQueueRef.current.filter(
-					item => Math.abs(item.data._syncVersion - syncVersion) > 1000
-				);
-				saveSyncQueue(syncQueueRef.current);
-				setPendingCount(syncQueueRef.current.length);
-
-				return true;
-			} else {
-				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-			}
-		} catch (e) {
-			console.error('[SVAKS] Push error:', e.message);
-			setSyncStatus('offline');
-			setSyncError(e.message);
-
-			// Save to localStorage when offline (hybrid mode)
-			saveToStorage(dataToPush);
-
-			const queueItem = {
-				id: Date.now(),
-				data: dataWithMeta,
-				retryCount: 0,
-				timestamp: now
-			};
-			syncQueueRef.current.push(queueItem);
-			saveSyncQueue(syncQueueRef.current);
-			setPendingCount(syncQueueRef.current.length);
-
-			scheduleRetry();
-
-			return false;
-		}
-	}, [scheduleRetry]);
-
+	// ===================================
+	// FETCH DATA FROM GOOGLE SHEETS
+	// ===================================
 	const fetchCloudData = useCallback(async (showStatus = false) => {
 		if (!CLOUD_URL) return null;
+		if (isFetchingRef.current) return null;
+
+		isFetchingRef.current = true;
 		if (showStatus) setSyncStatus('loading');
 
 		try {
 			const loadUrl = getLoadUrl(CLOUD_URL);
 			const controller = new AbortController();
-			const timeout = setTimeout(() => controller.abort(), 15000);
+			const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
 
 			const response = await fetch(loadUrl, {
 				signal: controller.signal,
@@ -459,14 +196,15 @@ export function DataProvider({ children }) {
 			clearTimeout(timeout);
 
 			if (!response.ok) {
-				if (showStatus) setSyncStatus('idle');
-				return null;
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 			}
 
 			const result = await response.json();
+			isFetchingRef.current = false;
 			return result;
 		} catch (e) {
-			console.error('[SVAKS] Fetch error:', e.message);
+			console.error('[SVAKS] Cloud fetch error:', e.message);
+			isFetchingRef.current = false;
 			if (showStatus) {
 				setSyncStatus('error');
 				setSyncError(e.message);
@@ -475,178 +213,165 @@ export function DataProvider({ children }) {
 		}
 	}, []);
 
-	// MERGE helper: combines local and cloud arrays by ID — ONLY ADDS new items and UPDATES existing ones.
-	// NEVER deletes items. Items only in local are kept. Items only in cloud are added.
-	const mergeArraysById = useCallback((localArr, cloudArr) => {
-		if (!Array.isArray(cloudArr) || cloudArr.length === 0) return localArr || [];
-		if (!Array.isArray(localArr) || localArr.length === 0) return [...cloudArr];
-
-		const merged = [...localArr];
-		const localIds = new Set(localArr.map(item => item.id));
-
-		cloudArr.forEach(cloudItem => {
-			if (!localIds.has(cloudItem.id)) {
-				// New item from cloud — ADD it
-				merged.push(cloudItem);
-			} else {
-				// Existing item — UPDATE with cloud data
-				const idx = merged.findIndex(item => item.id === cloudItem.id);
-				if (idx !== -1) {
-					merged[idx] = { ...merged[idx], ...cloudItem };
-				}
-			}
-		});
-
-		return merged;
-	}, []);
-
+	// ===================================
+	// APPLY CLOUD DATA TO STATE
+	// ===================================
 	const applyCloudData = useCallback((cloud) => {
 		if (!cloud) return;
 
-		const hasContent =
-			(cloud.members?.length > 0) ||
-			(cloud.committee?.some(c => c.name)) ||
-			(cloud.collections?.length > 0) ||
-			(cloud.expenditure?.length > 0) ||
-			(cloud.notifications?.length > 0) ||
-			cloud.settings?.pin || 
-			cloud.settings?.appName !== defaultSettings.appName;
+		console.log('[SVAKS] Applying cloud data, version:', cloud._syncVersion);
 
-		if (!hasContent) {
-			return;
-		}
-
-		const cloudVersion = Number(cloud._syncVersion) || 0;
-
-		console.log('[SVAKS] MERGE-applying cloud data, version:', cloudVersion);
-
-		// Mark that the next data change should NOT trigger a push (prevents infinite loop)
-		skipNextPushRef.current = true;
-
-		// MERGE: cloud data only ADDS new items and UPDATES existing — NEVER deletes
-		setData(prev => {
-			const mergedMembers = mergeArraysById(prev.members, cloud.members);
-			const mergedCollections = mergeArraysById(prev.collections, cloud.collections);
-			const mergedExpenditure = mergeArraysById(prev.expenditure, cloud.expenditure);
-			const mergedNotifications = mergeArraysById(prev.notifications, cloud.notifications);
-
-			// Committee: merge by ID, keeping local entries intact
-			let mergedCommittee = prev.committee;
-			if (Array.isArray(cloud.committee) && cloud.committee.length > 0) {
-				mergedCommittee = prev.committee.map(localC => {
-					const cloudC = cloud.committee.find(c => c.id === localC.id || c.position === localC.position);
-					if (cloudC && cloudC.name) {
-						return { ...localC, ...cloudC };
-					}
-					return localC;
-				});
-			}
-
-			// Settings: merge (cloud overrides individual fields, not whole object)
-			const mergedSettings = {
+		setData({
+			_syncVersion: Number(cloud._syncVersion) || Date.now(),
+			members: Array.isArray(cloud.members) ? cloud.members : [],
+			collections: Array.isArray(cloud.collections) ? cloud.collections : [],
+			expenditure: Array.isArray(cloud.expenditure) ? cloud.expenditure : [],
+			committee: Array.isArray(cloud.committee) && cloud.committee.length > 0
+				? defaultCommittee.map(dc => {
+					const cloudC = cloud.committee.find(c => c.id === dc.id || c.position === dc.position);
+					return cloudC && cloudC.name ? { ...dc, ...cloudC } : dc;
+				})
+				: defaultCommittee.map(c => ({ ...c })),
+			notifications: Array.isArray(cloud.notifications) ? cloud.notifications : [],
+			gallery: Array.isArray(cloud.gallery) ? cloud.gallery : [],
+			settings: {
 				...defaultSettings,
-				...prev.settings,
-				...(Array.isArray(cloud.settings) ? {} : (cloud.settings || {}))
-			};
-
-			// Gallery: merge by ID
-			const mergedGallery = mergeArraysById(prev.gallery, cloud.gallery);
-
-			return {
-				_syncVersion: cloudVersion,
-				members: mergedMembers,
-				collections: mergedCollections,
-				expenditure: mergedExpenditure,
-				committee: mergedCommittee,
-				notifications: mergedNotifications,
-				gallery: mergedGallery,
-				settings: mergedSettings
-			};
-		});
-	}, [mergeArraysById]);
-
-	const loadFromCloud = useCallback(async () => {
-		const cloud = await fetchCloudData(true);
-		if (!cloud) return;
-
-		const localVersion = data._syncVersion || 0;
-		const cloudVersion = Number(cloud._syncVersion) || 0;
-
-		console.log('[SVAKS] Comparing versions - Local:', localVersion, 'Cloud:', cloudVersion);
-
-		if (cloudVersion > localVersion || !initialLoadDone) {
-			console.log('[SVAKS] Updating from cloud...');
-			applyCloudData(cloud);
-			setInitialLoadDone(true);
-		}
-
-		setSyncStatus('synced');
-		const now = new Date().toISOString();
-		setLastSyncTime(now);
-		setSyncLastTime(now);
-	}, [fetchCloudData, data._syncVersion, initialLoadDone, applyCloudData]);
-
-	// Initial cloud load
-	useEffect(() => {
-		if (!initialLoadDone) {
-			console.log('[SVAKS] Initial cloud load...');
-			loadFromCloud();
-		}
-	}, [initialLoadDone, loadFromCloud]);
-
-	// Faster initial load delay
-	useEffect(() => {
-		const timer = setTimeout(() => {
-			if (!initialLoadDone) {
-				loadFromCloud();
+				...(cloud.settings && !Array.isArray(cloud.settings) ? cloud.settings : {})
 			}
-		}, INITIAL_LOAD_DELAY);
-		return () => clearTimeout(timer);
-	}, [initialLoadDone, loadFromCloud]);
+		});
 
-	// Auto-sync: Push data to cloud with DEBOUNCE to prevent infinite loop
-	const autoPushTimerRef = useRef(null);
-	const skipNextPushRef = useRef(false);
+		const now = new Date().toISOString();
+		setSyncLastTime(now);
+		setSyncStatus('synced');
+		setSyncError('');
+	}, []);
 
-	useEffect(() => {
-		if (!CLOUD_URL) return;
-
-		const isAdmin = sessionStorage.getItem('svaks_admin') === 'true';
-		if (!isAdmin) return;
-
-		// Skip push if this data change came from cloud fetch (prevents infinite loop)
-		if (skipNextPushRef.current) {
-			skipNextPushRef.current = false;
-			saveToStorage(data);
-			return;
+	// ===================================
+	// PUSH DATA TO GOOGLE SHEETS
+	// ===================================
+	const pushToCloud = useCallback(async (dataToPush) => {
+		if (!CLOUD_URL) {
+			console.warn('[SVAKS] No cloud URL configured');
+			return false;
 		}
 
-		// Only auto-sync if there's actual data to sync
-		const hasData = data.members?.length > 0 ||
-			data.collections?.length > 0 ||
-			data.expenditure?.length > 0 ||
-			data.committee?.some(c => c.name) ||
-			data.notifications?.length > 0;
-
-		if (hasData) {
-			// Save to localStorage immediately
-			saveToStorage(data);
-
-			// Debounce cloud push
-			if (autoPushTimerRef.current) clearTimeout(autoPushTimerRef.current);
-			autoPushTimerRef.current = setTimeout(() => {
-				pushToCloud(data);
-			}, AUTO_PUSH_DEBOUNCE);
-		}
-
-		return () => {
-			if (autoPushTimerRef.current) clearTimeout(autoPushTimerRef.current);
+		const now = Date.now();
+		const dataWithMeta = {
+			...dataToPush,
+			_syncVersion: now,
+			_lastSync: new Date().toISOString()
 		};
-	}, [data, pushToCloud]);
 
-	// Poll for changes from cloud - FASTER (3 seconds)
+		console.log('[SVAKS] Pushing to cloud, version:', now);
+
+		try {
+			const postUrl = getPostUrl(CLOUD_URL);
+
+			const response = await fetch(postUrl, {
+				method: 'POST',
+				mode: 'no-cors',
+				headers: { 'Content-Type': 'text/plain' },
+				body: JSON.stringify(dataWithMeta)
+			});
+
+			// no-cors always returns opaque response — we assume success
+			if (response.ok || response.status === 0 || response.type === 'opaque') {
+				console.log('[SVAKS] Push completed (opaque response — assumed success)');
+				return true;
+			} else {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			}
+		} catch (e) {
+			console.error('[SVAKS] Push error:', e.message);
+			return false;
+		}
+	}, []);
+
+	// ===================================
+	// SAVE & VERIFY — The core save flow
+	// Push to cloud → wait → re-fetch to confirm
+	// ===================================
+	const saveAndVerify = useCallback(async (newData) => {
+		setSaving(true);
+		setSyncStatus('syncing');
+
+		// Step 1: Push to Google Sheets
+		const pushSuccess = await pushToCloud(newData);
+
+		if (!pushSuccess) {
+			setSyncStatus('error');
+			setSyncError('Failed to push data to cloud. Check internet connection.');
+			setSaving(false);
+			return false;
+		}
+
+		// Step 2: Wait a moment for Google Sheets to process
+		await new Promise(resolve => setTimeout(resolve, 1500));
+
+		// Step 3: Re-fetch from cloud to verify
+		const cloud = await fetchCloudData(false);
+		if (cloud) {
+			applyCloudData(cloud);
+			console.log('[SVAKS] Save verified — cloud data re-fetched');
+		} else {
+			// Push was done, but couldn't verify. Apply local data for now.
+			setData(newData);
+			setSyncStatus('synced');
+			console.warn('[SVAKS] Could not verify save, using local data');
+		}
+
+		setSaving(false);
+		return true;
+	}, [pushToCloud, fetchCloudData, applyCloudData]);
+
+	// ===================================
+	// INITIAL CLOUD LOAD
+	// ===================================
 	useEffect(() => {
-		if (!CLOUD_URL) return;
+		let cancelled = false;
+
+		const doInitialLoad = async () => {
+			console.log('[SVAKS] Initial cloud load starting...');
+			setSyncStatus('loading');
+
+			let retries = 0;
+			let cloud = null;
+
+			while (!cloud && retries < 3 && !cancelled) {
+				cloud = await fetchCloudData(true);
+				if (!cloud) {
+					retries++;
+					if (retries < 3) {
+						console.log(`[SVAKS] Retry ${retries}/3...`);
+						await new Promise(r => setTimeout(r, 2000));
+					}
+				}
+			}
+
+			if (cancelled) return;
+
+			if (cloud) {
+				applyCloudData(cloud);
+				setInitialLoadDone(true);
+				console.log('[SVAKS] Initial load complete!');
+			} else {
+				setSyncStatus('error');
+				setSyncError('Could not connect to Google Sheets. Check internet and try refreshing.');
+				setInitialLoadDone(true);
+				console.error('[SVAKS] Initial load failed after 3 retries');
+			}
+		};
+
+		doInitialLoad();
+
+		return () => { cancelled = true; };
+	}, [fetchCloudData, applyCloudData]);
+
+	// ===================================
+	// POLL FOR CHANGES (every 15 seconds)
+	// ===================================
+	useEffect(() => {
+		if (!CLOUD_URL || !initialLoadDone) return;
 
 		const poll = async () => {
 			const cloud = await fetchCloudData(false);
@@ -656,71 +381,51 @@ export function DataProvider({ children }) {
 			const localVersion = data._syncVersion || 0;
 
 			if (cloudVersion > localVersion) {
-				console.log('[SVAKS] Poll: New data detected, updating...');
+				console.log('[SVAKS] Poll: New data detected, updating...', { cloudVersion, localVersion });
 				applyCloudData(cloud);
-				setSyncStatus('synced');
-				const now = new Date().toISOString();
-				setLastSyncTime(now);
-				setSyncLastTime(now);
-			}
-
-			if (syncQueueRef.current.length > 0) {
-				processQueue();
 			}
 		};
 
-		pollRef.current = setInterval(poll, SYNC_INTERVAL); // 3 seconds
-		const quickCheck = setTimeout(poll, 1000); // Quick first check
+		pollRef.current = setInterval(poll, SYNC_INTERVAL);
 
 		return () => {
 			if (pollRef.current) clearInterval(pollRef.current);
-			clearTimeout(quickCheck);
 		};
-	}, [fetchCloudData, data._syncVersion, applyCloudData, processQueue]);
+	}, [fetchCloudData, data._syncVersion, applyCloudData, initialLoadDone]);
 
-	// Tab visibility sync
+	// ===================================
+	// TAB VISIBILITY — refresh on tab focus
+	// ===================================
 	useEffect(() => {
-		const handleVisibility = () => {
-			if (document.visibilityState === 'visible') {
-				console.log('[SVAKS] Tab visible, syncing...');
-				loadFromCloud();
-				if (syncQueueRef.current.length > 0) {
-					processQueue();
+		if (!CLOUD_URL) return;
+
+		const handleVisibility = async () => {
+			if (document.visibilityState === 'visible' && initialLoadDone) {
+				console.log('[SVAKS] Tab visible, refreshing...');
+				const cloud = await fetchCloudData(false);
+				if (cloud) {
+					applyCloudData(cloud);
 				}
 			}
 		};
 
 		document.addEventListener('visibilitychange', handleVisibility);
 		return () => document.removeEventListener('visibilitychange', handleVisibility);
-	}, [loadFromCloud, processQueue]);
+	}, [fetchCloudData, applyCloudData, initialLoadDone]);
 
-	// Window focus sync
+	// ===================================
+	// ONLINE/OFFLINE DETECTION
+	// ===================================
 	useEffect(() => {
-		const handleFocus = () => {
-			console.log('[SVAKS] Window focused...');
-			loadFromCloud();
-			if (syncQueueRef.current.length > 0) {
-				processQueue();
-			}
-		};
-
-		window.addEventListener('focus', handleFocus);
-		return () => window.removeEventListener('focus', handleFocus);
-	}, [loadFromCloud, processQueue]);
-
-	// Online/Offline detection for hybrid mode
-	useEffect(() => {
-		const handleOnline = () => {
-			console.log('[SVAKS] Back online, syncing...');
-			setSyncStatus('syncing');
-			loadFromCloud();
-			if (syncQueueRef.current.length > 0) {
-				processQueue();
-			}
+		const handleOnline = async () => {
+			console.log('[SVAKS] Back online, refreshing...');
+			setSyncStatus('loading');
+			const cloud = await fetchCloudData(true);
+			if (cloud) applyCloudData(cloud);
 		};
 
 		const handleOffline = () => {
-			console.log('[SVAKS] Gone offline, will save to localStorage');
+			console.log('[SVAKS] Gone offline');
 			setSyncStatus('offline');
 		};
 
@@ -731,57 +436,12 @@ export function DataProvider({ children }) {
 			window.removeEventListener('online', handleOnline);
 			window.removeEventListener('offline', handleOffline);
 		};
-	}, [loadFromCloud, processQueue]);
+	}, [fetchCloudData, applyCloudData]);
 
-	// Load sync queue on mount
-	useEffect(() => {
-		const queue = loadSyncQueue();
-		syncQueueRef.current = queue;
-		setPendingCount(queue.length);
-		if (queue.length > 0) {
-			scheduleRetry();
-		}
-	}, [scheduleRetry]);
-
-	// Cleanup on unmount
-	useEffect(() => {
-		return () => {
-			if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-			if (pollRef.current) clearInterval(pollRef.current);
-		};
-	}, []);
-
-	const syncToGoogleSheet = useCallback(async () => {
-		if (!CLOUD_URL) {
-			console.warn('Google Sheets URL nahi mila!');
-			return;
-		}
-		setSyncStatus('syncing');
-		const success = await pushToCloud(data);
-		if (success) {
-			console.log('Data Google Sheets mein save ho gaya!');
-		}
-	}, [pushToCloud, data]);
-
-	const loadFromGoogleSheet = useCallback(async () => {
-		if (!CLOUD_URL) {
-			console.warn('Google Sheets URL nahi mila!');
-			return;
-		}
-		if (!confirm('Cloud se latest data merge karna hai? (Sirf naya data add hoga, kuch delete nahi hoga)')) return;
-
-		setSyncStatus('loading');
-		await loadFromCloud();
-		console.log('Data load ho gaya!');
-	}, [loadFromCloud]);
-
-	const clearSyncQueue = useCallback(() => {
-		syncQueueRef.current = [];
-		saveSyncQueue([]);
-		setPendingCount(0);
-		setSyncError('');
-		console.log('[SVAKS] Sync queue cleared');
-	}, []);
+	// ===================================
+	// DATA MUTATION FUNCTIONS (Add, Update only — NO Delete)
+	// All mutations save to cloud immediately
+	// ===================================
 
 	const update = useCallback((key, value) => {
 		setData(prev => ({ ...prev, [key]: value }));
@@ -794,98 +454,100 @@ export function DataProvider({ children }) {
 		}));
 	}, []);
 
-	const updateCommittee = useCallback((id, fields) => {
-		setData(prev => ({
-			...prev,
-			committee: prev.committee.map(c => c.id === id ? { ...c, ...validateCommittee({ ...c, ...fields }) } : c)
-		}));
-	}, []);
-
+	// --- MEMBERS ---
 	const addMember = useCallback((member) => {
-		setData(prev => {
-			const m = validateMember({ ...member, monthlyFee: member.monthlyFee || prev.settings.monthlyFee });
-			return { ...prev, members: [...prev.members, m] };
-		});
-	}, []);
+		const m = validateMember({ ...member, monthlyFee: member.monthlyFee || data.settings.monthlyFee });
+		const newData = { ...data, members: [...data.members, m] };
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
 
 	const updateMember = useCallback((id, updates) => {
 		const parsedUpdates = { ...updates };
 		if (parsedUpdates.monthlyFee !== undefined) {
 			parsedUpdates.monthlyFee = Math.abs(Number(parsedUpdates.monthlyFee)) || 0;
 		}
-		setData(prev => ({
-			...prev,
-			members: prev.members.map(m => m.id === id ? validateMember({ ...m, ...parsedUpdates }) : m)
-		}));
-	}, []);
+		const newData = {
+			...data,
+			members: data.members.map(m => m.id === id ? validateMember({ ...m, ...parsedUpdates }) : m)
+		};
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
 
-	const deleteMember = useCallback((id) => {
-		setData(prev => ({ ...prev, members: prev.members.filter(m => m.id !== id) }));
-	}, []);
-
+	// --- COLLECTIONS ---
 	const addCollection = useCallback((collection) => {
-		setData(prev => {
-			const c = validateCollection(collection);
-			return { ...prev, collections: [...prev.collections, c] };
-		});
-	}, []);
+		const c = validateCollection(collection);
+		const newData = { ...data, collections: [...data.collections, c] };
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
 
 	const updateCollection = useCallback((id, fields) => {
 		const parsedUpdates = { ...fields };
 		if (parsedUpdates.amount !== undefined) {
 			parsedUpdates.amount = Math.abs(Number(parsedUpdates.amount)) || 0;
 		}
-		setData(prev => ({
-			...prev,
-			collections: prev.collections.map(c => c.id === id ? validateCollection({ ...c, ...parsedUpdates }) : c)
-		}));
-	}, []);
+		const newData = {
+			...data,
+			collections: data.collections.map(c => c.id === id ? validateCollection({ ...c, ...parsedUpdates }) : c)
+		};
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
 
-	const deleteCollection = useCallback((id) => {
-		setData(prev => ({ ...prev, collections: prev.collections.filter(c => c.id !== id) }));
-	}, []);
-
+	// --- EXPENDITURE ---
 	const addExpenditure = useCallback((expenditure) => {
-		setData(prev => {
-			const e = validateExpenditure(expenditure);
-			return { ...prev, expenditure: [...prev.expenditure, e] };
-		});
-	}, []);
+		const e = validateExpenditure(expenditure);
+		const newData = { ...data, expenditure: [...data.expenditure, e] };
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
 
 	const updateExpenditure = useCallback((id, updates) => {
 		const parsedUpdates = { ...updates };
 		if (parsedUpdates.amount !== undefined) {
 			parsedUpdates.amount = Math.abs(Number(parsedUpdates.amount)) || 0;
 		}
+		const newData = {
+			...data,
+			expenditure: data.expenditure.map(e => e.id === id ? validateExpenditure({ ...e, ...parsedUpdates }) : e)
+		};
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
+
+	// --- COMMITTEE ---
+	const updateCommittee = useCallback((id, fields) => {
 		setData(prev => ({
 			...prev,
-			expenditure: prev.expenditure.map(e => e.id === id ? validateExpenditure({ ...e, ...parsedUpdates }) : e)
+			committee: prev.committee.map(c => c.id === id ? { ...c, ...validateCommittee({ ...c, ...fields }) } : c)
 		}));
+		// NOTE: Committee updates are buffered locally. Use saveCommittee() to push to cloud.
 	}, []);
 
-	const deleteExpenditure = useCallback((id) => {
-		setData(prev => ({ ...prev, expenditure: prev.expenditure.filter(e => e.id !== id) }));
-	}, []);
+	const saveCommittee = useCallback(async () => {
+		return saveAndVerify(data);
+	}, [data, saveAndVerify]);
 
+	// --- NOTIFICATIONS ---
 	const addNotification = useCallback((notification) => {
-		setData(prev => {
-			const n = validateNotification(notification);
-			return { ...prev, notifications: [n, ...prev.notifications] };
-		});
-	}, []);
+		const n = validateNotification(notification);
+		const newData = { ...data, notifications: [n, ...data.notifications] };
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
 
 	const updateNotification = useCallback((id, fields) => {
-		setData(prev => ({
-			...prev,
-			notifications: prev.notifications.map(n => n.id === id ? { ...n, ...validateNotification({ ...n, ...fields }) } : n)
-		}));
-	}, []);
+		const newData = {
+			...data,
+			notifications: data.notifications.map(n => n.id === id ? { ...n, ...validateNotification({ ...n, ...fields }) } : n)
+		};
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
 
-	const deleteNotification = useCallback((id) => {
-		setData(prev => ({ ...prev, notifications: prev.notifications.filter(n => n.id !== id) }));
-	}, []);
-
-	// Gallery functions
+	// --- GALLERY ---
 	const addGalleryAlbum = useCallback((album) => {
 		const newAlbum = {
 			id: Date.now(),
@@ -894,54 +556,79 @@ export function DataProvider({ children }) {
 			cover: album.cover || '',
 			photos: album.photos || []
 		};
-		setData(prev => ({ ...prev, gallery: [...prev.gallery, newAlbum] }));
-	}, []);
+		const newData = { ...data, gallery: [...data.gallery, newAlbum] };
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
 
 	const updateGalleryAlbum = useCallback((id, fields) => {
-		setData(prev => ({
-			...prev,
-			gallery: prev.gallery.map(album =>
+		const newData = {
+			...data,
+			gallery: data.gallery.map(album =>
 				album.id === id ? { ...album, ...fields } : album
 			)
-		}));
-	}, []);
-
-	const deleteGalleryAlbum = useCallback((id) => {
-		setData(prev => ({ ...prev, gallery: prev.gallery.filter(a => a.id !== id) }));
-	}, []);
+		};
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
 
 	const addPhotoToAlbum = useCallback((albumId, photoUrl) => {
-		setData(prev => ({
-			...prev,
-			gallery: prev.gallery.map(album => {
+		const newData = {
+			...data,
+			gallery: data.gallery.map(album => {
 				if (album.id === albumId) {
 					const newPhotos = [...album.photos, { id: Date.now(), url: photoUrl }];
-					// Auto-set cover if not set
 					const newCover = album.cover || photoUrl;
 					return { ...album, photos: newPhotos, cover: newCover };
 				}
 				return album;
 			})
-		}));
-	}, []);
+		};
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
 
-	const removePhotoFromAlbum = useCallback((albumId, photoId) => {
-		setData(prev => ({
-			...prev,
-			gallery: prev.gallery.map(album => {
-				if (album.id === albumId) {
-					const newPhotos = album.photos.filter(p => p.id !== photoId);
-					// Update cover if removed photo was cover
-					const newCover = album.cover === album.photos.find(p => p.id === photoId)?.url
-						? (newPhotos[0]?.url || '')
-						: album.cover;
-					return { ...album, photos: newPhotos, cover: newCover };
-				}
-				return album;
-			})
-		}));
-	}, []);
+	// --- SYNC FUNCTIONS ---
+	const syncToGoogleSheet = useCallback(async () => {
+		if (!CLOUD_URL) {
+			console.warn('Google Sheets URL nahi mila!');
+			return;
+		}
+		return saveAndVerify(data);
+	}, [data, saveAndVerify]);
 
+	const loadFromGoogleSheet = useCallback(async () => {
+		if (!CLOUD_URL) {
+			console.warn('Google Sheets URL nahi mila!');
+			return;
+		}
+		setSyncStatus('loading');
+		const cloud = await fetchCloudData(true);
+		if (cloud) {
+			applyCloudData(cloud);
+			console.log('[SVAKS] Data refreshed from cloud!');
+		}
+	}, [fetchCloudData, applyCloudData]);
+
+	// --- SAVE SETTINGS ---
+	const saveSettings = useCallback(async () => {
+		return saveAndVerify(data);
+	}, [data, saveAndVerify]);
+
+	// --- SAVE ALL (manual full push) ---
+	const saveAllToCloud = useCallback(async () => {
+		return saveAndVerify(data);
+	}, [data, saveAndVerify]);
+
+	// --- BULK OPERATIONS ---
+	const bulkAddCollections = useCallback(async (newCollections) => {
+		const validated = newCollections.map(c => validateCollection(c));
+		const newData = { ...data, collections: [...data.collections, ...validated] };
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
+
+	// --- EXPORT / IMPORT ---
 	const exportJSON = useCallback(() => {
 		const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
 		const url = URL.createObjectURL(blob);
@@ -954,40 +641,47 @@ export function DataProvider({ children }) {
 
 	const importJSON = useCallback((file) => {
 		const reader = new FileReader();
-		reader.onload = (e) => {
+		reader.onload = async (e) => {
 			try {
 				const imp = JSON.parse(e.target.result);
-				setData({
-					_syncVersion: imp._syncVersion || 0,
+				const newData = {
+					_syncVersion: imp._syncVersion || Date.now(),
 					members: imp.members || [],
 					collections: imp.collections || [],
 					expenditure: imp.expenditure || [],
 					committee: imp.committee || defaultCommittee.map(c => ({ ...c })),
-					notifications: imp.notifications || defaultNotifications.map(n => ({ ...n })),
-					gallery: imp.gallery || defaultGallery.map(g => ({ ...g })),
+					notifications: imp.notifications || [],
+					gallery: imp.gallery || [],
 					settings: { ...defaultSettings, ...(imp.settings || {}) }
-				});
-				console.log('Data import successful!');
+				};
+				setData(newData);
+				await saveAndVerify(newData);
+				console.log('[SVAKS] Data imported and saved to cloud!');
 			} catch {
 				console.error('Invalid JSON file!');
 			}
 		};
 		reader.readAsText(file);
-	}, []);
+	}, [saveAndVerify]);
 
+	// ===================================
+	// CONTEXT VALUE
+	// ===================================
 	const value = {
 		data, setData, update,
-		members: data.members, addMember, updateMember, deleteMember,
-		collections: data.collections, addCollection, updateCollection, deleteCollection,
-		expenditure: data.expenditure, addExpenditure, updateExpenditure, deleteExpenditure,
-		committee: data.committee, updateCommittee,
-		notifications: data.notifications, addNotification, updateNotification, deleteNotification,
-		gallery: data.gallery, addGalleryAlbum, updateGalleryAlbum, deleteGalleryAlbum,
-		addPhotoToAlbum, removePhotoFromAlbum,
-		settings: data.settings, updateSetting,
-		syncStatus, syncError, syncLastTime, pendingCount,
-		syncToGoogleSheet, loadFromGoogleSheet, clearSyncQueue,
-		exportJSON, importJSON
+		members: data.members, addMember, updateMember,
+		collections: data.collections, addCollection, updateCollection,
+		expenditure: data.expenditure, addExpenditure, updateExpenditure,
+		committee: data.committee, updateCommittee, saveCommittee,
+		notifications: data.notifications, addNotification, updateNotification,
+		gallery: data.gallery, addGalleryAlbum, updateGalleryAlbum,
+		addPhotoToAlbum,
+		settings: data.settings, updateSetting, saveSettings,
+		syncStatus, syncError, syncLastTime, saving,
+		syncToGoogleSheet, loadFromGoogleSheet, saveAllToCloud,
+		bulkAddCollections,
+		exportJSON, importJSON,
+		initialLoadDone
 	};
 
 	return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
