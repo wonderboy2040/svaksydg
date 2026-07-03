@@ -1,0 +1,31 @@
+# ===========================================
+# Render.com Blueprint Configuration
+# ===========================================
+# This file auto-configures the deployment on Render.
+# Just connect your GitHub repo and Render will read this file.
+#
+# How to use:
+# 1. Push this code to GitHub
+# 2. Go to https://dashboard.render.com → New → Blueprint
+# 3. Select your GitHub repo
+# 4. Render will auto-detect this render.yaml and create the service
+# 5. Click "Apply" — done!
+
+services:
+  - type: web
+    name: svaks-yadgir
+    runtime: static
+    # Build command: install deps and build the Vite project
+    buildCommand: npm install && npm run build
+    # Publish directory: Vite outputs to dist/
+    staticPublishPath: ./dist
+    # SPA routing: redirect all unknown paths to index.html
+    # so React Router can handle them client-side
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # Auto-deploy when you push to main branch
+    autoDeploy: true
+    # Environment variables (none needed for this app — all config is in src/config.js)
+    envVars: []

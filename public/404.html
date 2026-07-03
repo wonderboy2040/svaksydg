@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SVAKS - Loading...</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, #1a0a00 0%, #2D1810 100%);
+        font-family: 'Inter', sans-serif;
+        color: #D4A017;
+      }
+      .loader {
+        text-align: center;
+      }
+      .om {
+        font-size: 64px;
+        margin-bottom: 20px;
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.6; transform: scale(0.95); }
+      }
+      .text {
+        font-size: 16px;
+        font-weight: 600;
+      }
+    </style>
+    <!--
+      SPA fallback page.
+      If a user lands on a deep link (e.g. /admin-login) and the static host
+      doesn't rewrite to index.html, this page bootstraps the React app
+      by redirecting to the root with the original path preserved.
+    -->
+    <script>
+      (function() {
+        // Save the requested path so React Router can pick it up after redirect
+        var path = window.location.pathname + window.location.search + window.location.hash;
+        // If we're not already at root, redirect to root with path info
+        if (path !== '/' && path !== '/index.html') {
+          try {
+            sessionStorage.setItem('svaks_redirect_path', path);
+          } catch (e) {}
+          window.location.replace('/');
+        } else {
+          // We're at root — load the React app
+          window.location.replace('/');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="loader">
+      <div class="om">ॐ</div>
+      <div class="text">Loading SVAKS...</div>
+    </div>
+  </body>
+</html>

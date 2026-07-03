@@ -1,0 +1,4 @@
+# SPA fallback for Render / Netlify / Cloudflare Pages
+# All unknown paths return index.html with 200 status,
+# so React Router can handle client-side routing.
+/*    /index.html   200
