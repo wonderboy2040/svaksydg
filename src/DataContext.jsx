@@ -217,26 +217,44 @@ export function DataProvider({ children }) {
 	// APPLY CLOUD DATA TO STATE
 	// ===================================
 	const applyCloudData = useCallback((cloud) => {
-		if (!cloud) return;
+		if (!cloud || typeof cloud !== 'object') return;
 
 		console.log('[SVAKS] Applying cloud data, version:', cloud._syncVersion);
 
+		// Validate each section to prevent runtime crashes from malformed data
+		const safeMembers = Array.isArray(cloud.members)
+			? cloud.members.map(validateMember)
+			: [];
+		const safeCollections = Array.isArray(cloud.collections)
+			? cloud.collections.map(validateCollection)
+			: [];
+		const safeExpenditure = Array.isArray(cloud.expenditure)
+			? cloud.expenditure.map(validateExpenditure)
+			: [];
+		const safeNotifications = Array.isArray(cloud.notifications)
+			? cloud.notifications.map(validateNotification)
+			: [];
+		const safeGallery = Array.isArray(cloud.gallery)
+			? cloud.gallery
+			: [];
+		const safeCommittee = Array.isArray(cloud.committee) && cloud.committee.length > 0
+			? defaultCommittee.map(dc => {
+				const cloudC = cloud.committee.find(c => c.id === dc.id || c.position === dc.position);
+				return cloudC && cloudC.name ? { ...dc, ...validateCommittee({ ...dc, ...cloudC }) } : dc;
+			})
+			: defaultCommittee.map(c => ({ ...c }));
+
 		setData({
 			_syncVersion: Number(cloud._syncVersion) || Date.now(),
-			members: Array.isArray(cloud.members) ? cloud.members : [],
-			collections: Array.isArray(cloud.collections) ? cloud.collections : [],
-			expenditure: Array.isArray(cloud.expenditure) ? cloud.expenditure : [],
-			committee: Array.isArray(cloud.committee) && cloud.committee.length > 0
-				? defaultCommittee.map(dc => {
-					const cloudC = cloud.committee.find(c => c.id === dc.id || c.position === dc.position);
-					return cloudC && cloudC.name ? { ...dc, ...cloudC } : dc;
-				})
-				: defaultCommittee.map(c => ({ ...c })),
-			notifications: Array.isArray(cloud.notifications) ? cloud.notifications : [],
-			gallery: Array.isArray(cloud.gallery) ? cloud.gallery : [],
+			members: safeMembers,
+			collections: safeCollections,
+			expenditure: safeExpenditure,
+			committee: safeCommittee,
+			notifications: safeNotifications,
+			gallery: safeGallery,
 			settings: {
 				...defaultSettings,
-				...(cloud.settings && !Array.isArray(cloud.settings) ? cloud.settings : {})
+				...(cloud.settings && !Array.isArray(cloud.settings) && typeof cloud.settings === 'object' ? cloud.settings : {})
 			}
 		});
 
@@ -630,6 +648,17 @@ export function DataProvider({ children }) {
 		return saveAndVerify(data);
 	}, [data, saveAndVerify]);
 
+	// --- SAVE SETTINGS WITH PARTIAL PATCH ---
+	// Accepts a partial settings object, merges with current settings,
+	// pushes to cloud in one shot. Avoids stale-closure issues with
+	// sequential updateSetting() + saveSettings() calls.
+	const saveSettingsWith = useCallback(async (partialSettings) => {
+		const newSettings = { ...data.settings, ...partialSettings };
+		const newData = { ...data, settings: newSettings };
+		setData(newData);
+		return saveAndVerify(newData);
+	}, [data, saveAndVerify]);
+
 	// --- SAVE ALL (manual full push) ---
 	const saveAllToCloud = useCallback(async () => {
 		return saveAndVerify(data);
@@ -691,7 +720,7 @@ export function DataProvider({ children }) {
 		notifications: data.notifications, addNotification, updateNotification,
 		gallery: data.gallery, addGalleryAlbum, updateGalleryAlbum,
 		addPhotoToAlbum,
-		settings: data.settings, updateSetting, saveSettings,
+		settings: data.settings, updateSetting, saveSettings, saveSettingsWith,
 		syncStatus, syncError, syncLastTime, saving,
 		syncToGoogleSheet, loadFromGoogleSheet, saveAllToCloud,
 		bulkAddCollections,

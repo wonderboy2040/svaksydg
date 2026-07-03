@@ -131,7 +131,7 @@ function exportReport(members, collections, expenditure, memberStatus, month, ye
   </div>
 
   <div class="header">
-    <span class="om">&#9783;</span>
+    <span class="om">&#2368;</span>
     <h1>Soma Vamshi Aarya Kshthriya Samaj, Yadgir</h1>
     <div class="sub">MONTHLY REPORT</div>
     <div class="month">${escapeHtml(monthName)} ${year}</div>

@@ -21,8 +21,16 @@ export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
 
   const addToast = (message, type = 'info', duration = 3000) => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type, duration }]);
+    setToasts(prev => {
+      // Deduplicate: skip if an identical toast (same message + type) is
+      // already on screen. This prevents spam when a button is clicked
+      // repeatedly or a polling loop fires the same warning many times.
+      const isDuplicate = prev.some(t => t.message === message && t.type === type);
+      if (isDuplicate) return prev;
+
+      const id = Date.now() + Math.floor(Math.random() * 1000);
+      return [...prev, { id, message, type, duration }];
+    });
   };
 
   const removeToast = (id) => {

@@ -11,6 +11,8 @@
   --bg: #F5F0EB;
   --border: #E1D5C8;
   --card-bg: #FFFFFF;
+  --text: #1A0A00;
+  --text-muted: #666;
   --success: #00B894;
   --danger: #E17055;
   --warning: #FDCB6E;
@@ -18,6 +20,54 @@
   --glass-border: rgba(255, 255, 255, 0.2);
   --shadow-gold: 0 8px 32px rgba(212, 160, 23, 0.3);
   --shadow-maroon: 0 8px 32px rgba(128, 0, 0, 0.3);
+}
+
+/* Dark mode overrides — toggled via data-theme="dark" on <html> */
+html[data-theme="dark"] {
+  --bg: #1A0A00;
+  --cream: #2D1810;
+  --card-bg: #2D1810;
+  --border: #4A2C1A;
+  --text: #FFF8F0;
+  --text-muted: #B8A088;
+  --dark: #FFF8F0;
+  --glass: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.15);
+}
+
+html[data-theme="dark"] body {
+  background: linear-gradient(180deg, #1a0a00 0%, #2D1810 100%);
+  color: var(--text);
+}
+
+html[data-theme="dark"] table {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+html[data-theme="dark"] th {
+  background: linear-gradient(135deg, var(--deep-maroon), #3A0000);
+}
+
+html[data-theme="dark"] td {
+  border-bottom-color: var(--border);
+  color: var(--text);
+}
+
+html[data-theme="dark"] tr:hover td {
+  background: linear-gradient(135deg, rgba(212, 160, 23, 0.08), rgba(255, 153, 51, 0.08));
+}
+
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #888;
 }
 
 * {
@@ -374,4 +424,161 @@ tr:hover td {
 ::selection {
   background: rgba(212, 160, 23, 0.3);
   color: var(--dark);
+}
+
+/* ====================================
+   Theme & Language Toggle Buttons
+   ==================================== */
+.theme-lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(212, 160, 23, 0.12);
+  border: 1px solid rgba(212, 160, 23, 0.3);
+  border-radius: 20px;
+  padding: 4px;
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+}
+
+.theme-lang-toggle button {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s;
+  min-width: 28px;
+}
+
+.theme-lang-toggle button.active {
+  background: linear-gradient(135deg, var(--saffron), var(--gold));
+  color: white;
+  box-shadow: 0 2px 8px rgba(255, 153, 51, 0.4);
+}
+
+.theme-lang-toggle button:hover:not(.active) {
+  background: rgba(212, 160, 23, 0.2);
+}
+
+/* On dark hero/nav background, the toggle should always be visible */
+.nav-toggle-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+}
+
+@media (max-width: 768px) {
+  .nav-toggle-wrapper {
+    margin-right: 0;
+    margin-bottom: 8px;
+  }
+}
+
+/* ====================================
+   Reminder / Share Buttons
+   ==================================== */
+.btn-whatsapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: linear-gradient(135deg, #25D366, #128C7E);
+  color: white !important;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  text-decoration: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-whatsapp:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
+}
+
+.btn-sms {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white !important;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  text-decoration: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-sms:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+}
+
+.btn-receipt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: linear-gradient(135deg, #6c5ce7, #5a4bd1);
+  color: white !important;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-receipt:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(108, 92, 231, 0.4);
+}
+
+.notice-share-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(212, 160, 23, 0.3);
+}
+
+.notice-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #25D366, #128C7E);
+  color: white !important;
+  border: none;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.notice-share-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
 }

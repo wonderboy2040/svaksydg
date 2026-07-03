@@ -1,11 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../DataContext';
+import { useLang } from '../i18n';
+import { useTheme } from '../utils/useTheme';
 import { useToast } from '../components/Toast';
 import { getDirectImageUrl, validateImageUrl, PLACEHOLDER_IMAGE } from '../utils';
+import {
+  getWhatsAppUrl,
+  getSmsUrl,
+  buildReminderMessage,
+  openShareUrl,
+  printReceipt
+} from '../utils/reminder';
 import Modal from '../components/Modal';
 import PDFExport from '../components/PDFExport';
 import { APP_VERSION } from '../config';
+import Loading from '../components/Loading';
 import '../styles/Admin.css';
 
 const MONTHS = [
@@ -61,6 +71,7 @@ function getMonthPaymentStatus(members, collections, month, year) {
 function DashboardSection() {
   const { members, collections, expenditure, settings, setData, bulkAddCollections, saving } = useData();
   const { addToast } = useToast();
+  const { t } = useLang();
 
   const safeParseDate = (dateStr) => {
     if (!dateStr) return new Date(0);
@@ -78,6 +89,54 @@ function DashboardSection() {
   const paidCount = monthStatus.filter(m => m.paid).length;
   const unpaidCount = monthStatus.filter(m => !m.paid).length;
 
+  // Build reminder message for an unpaid member
+  const buildMsg = (m) => {
+    const member = members.find(mem => mem.id === m.id);
+    const amount = member?.monthlyFee || settings.monthlyFee || 100;
+    return buildReminderMessage({
+      name: m.name,
+      month: MONTHS[currentMonth],
+      year: currentYear,
+      amount,
+      samajName: settings.appName || 'SVAKS Yadgir'
+    });
+  };
+
+  // Send reminder via WhatsApp
+  const handleWhatsAppReminder = (m) => {
+    if (!m.phone) {
+      addToast(t('reminder.noPhone'), 'warning');
+      return;
+    }
+    openShareUrl(getWhatsAppUrl(m.phone, buildMsg(m)));
+  };
+
+  // Send reminder via SMS
+  const handleSmsReminder = (m) => {
+    if (!m.phone) {
+      addToast(t('reminder.noPhone'), 'warning');
+      return;
+    }
+    openShareUrl(getSmsUrl(m.phone, buildMsg(m)));
+  };
+
+  // Bulk WhatsApp reminder: open each unpaid member's chat one by one
+  // (browsers block multiple window.open, so we just open the first one
+  // and show a toast listing the unpaid count for the admin to follow up)
+  const handleBulkWhatsApp = () => {
+    const unpaid = monthStatus.filter(m => !m.paid && m.phone);
+    if (unpaid.length === 0) {
+      addToast('No pending members with phone numbers', 'info');
+      return;
+    }
+    if (!window.confirm(`Send WhatsApp reminders to ${unpaid.length} unpaid members? (First chat will open — send the prefilled message, then come back to open the next.)`)) {
+      return;
+    }
+    // Open the first one — admin manually continues
+    openShareUrl(getWhatsAppUrl(unpaid[0].phone, buildMsg(unpaid[0])));
+    addToast(`${unpaid.length} reminders queued. Open them one by one from the table below.`, 'info');
+  };
+
   const markAllPaid = async () => {
     if (unpaidCount === 0) {
       addToast('All members already paid!', 'info');
@@ -85,11 +144,14 @@ function DashboardSection() {
     }
     if (window.confirm(`Mark all ${unpaidCount} pending members as paid for ${MONTHS[currentMonth]}?`)) {
       const newEntries = [];
+      const baseId = Date.now();
       let i = 0;
       monthStatus.forEach(m => {
         if (!m.paid) {
+          // Use a robust unique id: base timestamp + index + random suffix
+          // to prevent collisions even with very large member lists.
           newEntries.push({
-            id: Date.now() + i++,
+            id: baseId + i * 1000 + Math.floor(Math.random() * 1000),
             memberId: m.id,
             memberName: m.name,
             amount: members.find(mem => mem.id === m.id)?.monthlyFee || 100,
@@ -97,6 +159,7 @@ function DashboardSection() {
             date: new Date().toISOString().split('T')[0],
             note: `Bulk marked paid for ${MONTHS[currentMonth]} ${currentYear}`
           });
+          i++;
         }
       });
       const success = await bulkAddCollections(newEntries);
@@ -112,28 +175,39 @@ function DashboardSection() {
     .sort((a, b) => safeParseDate(b.date) - safeParseDate(a.date))
     .slice(0, 10);
 
+  // Print receipt for a collection entry
+  const handlePrintReceipt = (collection) => {
+    const member = members.find(m => m.id === collection.memberId);
+    printReceipt({
+      member,
+      collection,
+      samajName: settings.appName || 'SVAKS Yadgir',
+      location: settings.location || 'Yadgir'
+    });
+  };
+
   return (
     <div className="fade-in">
       {/* Summary Cards */}
       <div className="summary-grid">
         <div className="summary-card members">
           <div className="summary-icon">👥</div>
-          <h4>Total Members</h4>
+          <h4>{t('admin.totalMembers')}</h4>
           <div className="big-number">{members.length}</div>
         </div>
         <div className="summary-card collections">
           <div className="summary-icon">💰</div>
-          <h4>Total Collections</h4>
+          <h4>{t('admin.totalCollections')}</h4>
           <div className="big-number">₹{totalCollections.toLocaleString('en-IN')}</div>
         </div>
         <div className="summary-card expenditure">
           <div className="summary-icon">📊</div>
-          <h4>Total Expense</h4>
+          <h4>{t('admin.totalExpense')}</h4>
           <div className="big-number">₹{totalExpenditure.toLocaleString('en-IN')}</div>
         </div>
         <div className="summary-card balance">
           <div className="summary-icon">🏦</div>
-          <h4>Balance</h4>
+          <h4>{t('admin.balance')}</h4>
           <div className="big-number">₹{balance.toLocaleString('en-IN')}</div>
         </div>
       </div>
@@ -142,16 +216,23 @@ function DashboardSection() {
       <div className="admin-card">
         <div className="admin-card-header">
           <h3>{MONTHS[currentMonth]} {currentYear} - Monthly Payment Status</h3>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             <span className="badge badge-gold">
               {paidCount} Paid | {unpaidCount} Pending
             </span>
+            <button
+              className="btn-whatsapp"
+              onClick={handleBulkWhatsApp}
+              title="Send WhatsApp reminders to unpaid members"
+            >
+              💬 Bulk WhatsApp
+            </button>
             <button
               className="btn-primary btn-sm"
               onClick={markAllPaid}
               style={{ padding: '6px 12px', fontSize: '12px' }}
             >
-              Mark All Paid
+              {t('admin.markAllPaid')}
             </button>
           </div>
         </div>
@@ -168,6 +249,7 @@ function DashboardSection() {
                   <th>Status</th>
                   <th>Amount</th>
                   <th>Times</th>
+                  <th>Reminders</th>
                 </tr>
               </thead>
               <tbody>
@@ -184,6 +266,28 @@ function DashboardSection() {
                     </td>
                     <td>₹{m.paidAmount.toLocaleString('en-IN')}</td>
                     <td>{m.paidCount}</td>
+                    <td>
+                      {!m.paid && m.phone ? (
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button
+                            className="btn-whatsapp"
+                            onClick={() => handleWhatsAppReminder(m)}
+                            title="Send WhatsApp reminder"
+                          >
+                            💬
+                          </button>
+                          <button
+                            className="btn-sms"
+                            onClick={() => handleSmsReminder(m)}
+                            title="Send SMS reminder"
+                          >
+                            📱
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ color: '#aaa', fontSize: '11px' }}>{m.paid ? '✓ Paid' : 'No phone'}</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -205,7 +309,7 @@ function DashboardSection() {
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Date</th><th>Member</th><th>Amount</th><th>Source</th></tr>
+                  <tr><th>Date</th><th>Member</th><th>Amount</th><th>Source</th><th>Receipt</th></tr>
                 </thead>
                 <tbody>
                   {recentCollections.map(c => (
@@ -214,6 +318,15 @@ function DashboardSection() {
                       <td>{c.memberName || '-'}</td>
                       <td>₹{Number(c.amount).toLocaleString('en-IN')}</td>
                       <td><span className="badge badge-gold">{c.source || 'Other'}</span></td>
+                      <td>
+                        <button
+                          className="btn-receipt"
+                          onClick={() => handlePrintReceipt(c)}
+                          title="Print receipt"
+                        >
+                          {t('admin.printReceipt')}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -400,7 +513,7 @@ function MembersSection() {
 
 // ===== COLLECTIONS SECTION =====
 function CollectionsSection() {
-  const { collections, members, addCollection, updateCollection } = useData();
+  const { collections, members, addCollection, updateCollection, settings } = useData();
   const { addToast } = useToast();
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
   const [filterYear, setFilterYear] = useState(new Date().getFullYear());
@@ -439,6 +552,17 @@ function CollectionsSection() {
 
   const monthlyTotal = filtered.reduce((s, c) => s + Number(c.amount || 0), 0);
 
+  // Print receipt for a collection entry
+  const handlePrintReceipt = (collection) => {
+    const member = members.find(m => m.id === collection.memberId);
+    printReceipt({
+      member,
+      collection,
+      samajName: settings.appName || 'SVAKS Yadgir',
+      location: settings.location || 'Yadgir'
+    });
+  };
+
   const handleSave = () => {
     if (!form.memberId && !form.memberName) {
       addToast('Please select a member or enter name!', 'danger');
@@ -448,10 +572,10 @@ function CollectionsSection() {
       addToast('Please enter amount!', 'danger');
       return;
     }
-    
+
     // Close modal instantly
     setShowModal(false);
-    
+
     if (editId) {
       updateCollection(editId, form).then(success => {
         if (success) addToast('Payment updated & saved to cloud!', 'success');
@@ -508,7 +632,7 @@ function CollectionsSection() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>#</th><th>Date</th><th>Member</th><th>Amount</th><th>Source</th><th>Note</th><th>Edit</th></tr>
+                <tr><th>#</th><th>Date</th><th>Member</th><th>Amount</th><th>Source</th><th>Note</th><th>Receipt</th><th>Edit</th></tr>
               </thead>
               <tbody>
                 {filtered.map((c, i) => (
@@ -519,6 +643,15 @@ function CollectionsSection() {
                     <td><strong>₹{Number(c.amount).toLocaleString('en-IN')}</strong></td>
                     <td><span className="badge badge-gold">{c.source || 'Other'}</span></td>
                     <td>{c.note || '-'}</td>
+                    <td>
+                      <button
+                        className="btn-receipt"
+                        onClick={() => handlePrintReceipt(c)}
+                        title="Print receipt"
+                      >
+                        🧾
+                      </button>
+                    </td>
                     <td>
                       <button onClick={() => openEdit(c)} className="btn-action btn-edit">✏️ Edit</button>
                     </td>
@@ -671,7 +804,7 @@ function ExpenditureSection() {
                 <tr><th>#</th><th>Date</th><th>Category</th><th>Amount</th><th>Description</th><th>Edit</th></tr>
               </thead>
               <tbody>
-                {expenditure.sort((a, b) => {
+                {[...expenditure].sort((a, b) => {
                   const dateA = a.date ? new Date(a.date) : new Date(0);
                   const dateB = b.date ? new Date(b.date) : new Date(0);
                   return dateB - dateA;
@@ -1395,7 +1528,7 @@ function CommitteeSection() {
 
 // ===== SETTINGS SECTION =====
 function SettingsSection() {
-  const { settings, updateSetting, syncToGoogleSheet, loadFromGoogleSheet, exportJSON, importJSON, syncStatus, syncError, syncLastTime, saving, saveSettings, members, collections, expenditure } = useData();
+  const { settings, saveSettingsWith, syncToGoogleSheet, loadFromGoogleSheet, exportJSON, importJSON, syncStatus, syncError, syncLastTime, saving, members, collections, expenditure } = useData();
   const { addToast } = useToast();
   const [form, setForm] = useState({
     appName: settings.appName,
@@ -1404,16 +1537,26 @@ function SettingsSection() {
     sheetUrl: settings.sheetUrl
   });
 
+  // Sync local form when cloud settings change (e.g., after poll/refresh)
+  useEffect(() => {
+    setForm({
+      appName: settings.appName,
+      location: settings.location,
+      monthlyFee: settings.monthlyFee,
+      sheetUrl: settings.sheetUrl
+    });
+  }, [settings.appName, settings.location, settings.monthlyFee, settings.sheetUrl]);
+
   const handleSaveSettings = async () => {
-    if (form.appName) updateSetting('appName', form.appName);
-    if (form.location) updateSetting('location', form.location);
-    updateSetting('monthlyFee', Number(form.monthlyFee) || 100);
-    // Need a small delay for state to update, then save
-    setTimeout(async () => {
-      const success = await saveSettings();
-      if (success) addToast('Settings saved to cloud!', 'success');
-      else addToast('Failed to save to cloud!', 'danger');
-    }, 100);
+    // Compute the new settings directly and push to cloud in one shot
+    // to avoid the stale-closure problem with sequential updateSetting() calls.
+    const success = await saveSettingsWith({
+      appName: form.appName?.trim() || settings.appName,
+      location: form.location?.trim() || settings.location,
+      monthlyFee: Math.abs(Number(form.monthlyFee)) || 100
+    });
+    if (success) addToast('Settings saved to cloud!', 'success');
+    else addToast('Failed to save to cloud!', 'danger');
   };
 
   const handleImportFile = (e) => {
@@ -1901,6 +2044,8 @@ function NotificationsSection() {
 function Admin() {
   const navigate = useNavigate();
   const { syncStatus, settings, loadFromGoogleSheet, syncToGoogleSheet, members, collections, expenditure, saving, initialLoadDone } = useData();
+  const { lang, setLang, t } = useLang();
+  const { theme, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -1971,7 +2116,14 @@ function Admin() {
     }
   };
 
-  const activeTabLabel = tabs.find(t => t.id === activeTab)?.label || 'Dashboard';
+  const activeTabLabel = tabs.find(tab => tab.id === activeTab)?.label || 'Dashboard';
+
+  // Show a full-screen loader while the initial cloud load is in flight.
+  // This prevents the admin from rendering with empty arrays and showing
+  // "No members yet" / "No collections this month" flashes before data arrives.
+  if (!initialLoadDone && syncStatus === 'loading') {
+    return <Loading fullScreen message={t('admin.loading')} />;
+  }
 
   return (
     <div className="admin-layout">
@@ -1996,6 +2148,45 @@ function Admin() {
           ))}
         </nav>
         <div className="admin-sidebar-footer">
+          {/* Language & Theme Toggles */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="theme-lang-toggle" role="group" aria-label="Language toggle">
+              <button
+                type="button"
+                className={lang === 'en' ? 'active' : ''}
+                onClick={() => setLang('en')}
+                style={{ color: lang === 'en' ? 'white' : 'rgba(255,255,255,0.7)' }}
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                className={lang === 'hi' ? 'active' : ''}
+                onClick={() => setLang('hi')}
+                style={{ color: lang === 'hi' ? 'white' : 'rgba(255,255,255,0.7)' }}
+              >
+                हिं
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}
+              aria-label="Toggle theme"
+              style={{
+                background: 'rgba(212, 160, 23, 0.15)',
+                border: '1px solid rgba(212, 160, 23, 0.3)',
+                color: '#D4A017',
+                padding: '4px 10px',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                transition: 'all 0.2s'
+              }}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
+          </div>
           {/* Cloud Sync Status Indicator */}
           <>
             <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' || saving ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' ? 'rgba(225,112,85,0.15)' : syncStatus === 'loading' ? 'rgba(108,92,231,0.15)' : 'rgba(255,255,255,0.05)' }}>
@@ -2008,11 +2199,11 @@ function Admin() {
               onClick={loadFromGoogleSheet}
               style={{ marginBottom: '12px', padding: '6px 10px', fontSize: '11px', background: 'rgba(0,184,148,0.2)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '6px', color: '#00B894', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', width: '100%' }}
             >
-              🔄 Refresh from Cloud
+              {t('admin.refreshCloud')}
             </button>
           </>
           <button onClick={handleLogout}>
-            <span>🔒</span> Logout →
+            <span>🔒</span> {t('admin.logout').replace('🔒 ', '')} →
           </button>
         </div>
       </aside>
