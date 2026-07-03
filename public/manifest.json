@@ -6,12 +6,18 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#1a0a00",
+  "background_color": "#800000",
   "theme_color": "#800000",
   "categories": ["productivity", "finance", "social"],
   "lang": "en",
   "dir": "ltr",
   "icons": [
+    {
+      "src": "/favicon-64.png",
+      "sizes": "64x64",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
@@ -25,9 +31,10 @@
       "purpose": "any maskable"
     },
     {
-      "src": "/favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "/icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "shortcuts": [
@@ -36,6 +43,13 @@
       "short_name": "Admin",
       "description": "Open admin panel",
       "url": "/admin-login",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Monthly Collection",
+      "short_name": "₹200",
+      "description": "Mark monthly payments",
+      "url": "/admin",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
