@@ -3,25 +3,40 @@
   "short_name": "SVAKS",
   "description": "Community management platform for member collections, expenditures, and samaj organization",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#1a0a00",
   "theme_color": "#800000",
-  "orientation": "portrait-primary",
+  "categories": ["productivity", "finance", "social"],
+  "lang": "en",
+  "dir": "ltr",
   "icons": [
-    {
-      "src": "/favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
-    },
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Admin Login",
+      "short_name": "Admin",
+      "description": "Open admin panel",
+      "url": "/admin-login",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

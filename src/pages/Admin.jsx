@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useData } from '../DataContext';
 import { useLang } from '../i18n';
 import { useTheme } from '../utils/useTheme';
+import { usePWAInstall, useServiceWorker } from '../utils/usePWA';
 import { useToast } from '../components/Toast';
 import { getDirectImageUrl, validateImageUrl, PLACEHOLDER_IMAGE } from '../utils';
 import {
@@ -12,6 +13,7 @@ import {
   openShareUrl,
   printReceipt
 } from '../utils/reminder';
+import { generateAnnualStatement, generateBulkStatements } from '../utils/annualStatement';
 import Modal from '../components/Modal';
 import PDFExport from '../components/PDFExport';
 import { APP_VERSION } from '../config';
@@ -727,6 +729,321 @@ function CollectionsSection() {
   );
 }
 
+// ===== MONTHLY FIXED COLLECTION SECTION =====
+// For 65 permanent members who pay Rs. 200/month.
+// Quick paid/unpaid toggle with receipt number field.
+function MonthlyFixedCollectionSection() {
+  const { members, collections, bulkAddCollections, updateCollection, settings, saving } = useData();
+  const { addToast } = useToast();
+  const [filterMonth, setFilterMonth] = useState(new Date().getMonth());
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+  const [receiptInputs, setReceiptInputs] = useState({}); // { [memberId]: receiptNo }
+  const [search, setSearch] = useState('');
+
+  const FIXED_AMOUNT = Number(settings.monthlyFee) || 200;
+
+  // Parse date safely
+  const parseDate = (dateStr) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  // For each member, check if they've paid this month/year
+  const memberStatus = members.map(m => {
+    const memberCollections = collections.filter(c => {
+      if (c.memberId !== m.id) return false;
+      const d = parseDate(c.date);
+      return d && d.getMonth() === filterMonth && d.getFullYear() === filterYear;
+    });
+    const collection = memberCollections[0]; // First collection this month
+    return {
+      ...m,
+      paid: memberCollections.length > 0,
+      collectionId: collection?.id || null,
+      receiptNo: collection?.receiptNo || '',
+      paidAmount: memberCollections.reduce((s, c) => s + Number(c.amount || 0), 0)
+    };
+  });
+
+  const filtered = memberStatus.filter(m =>
+    m.name?.toLowerCase().includes(search.toLowerCase()) ||
+    m.phone?.includes(search) ||
+    m.father?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const paidCount = memberStatus.filter(m => m.paid).length;
+  const unpaidCount = memberStatus.length - paidCount;
+  const totalCollected = memberStatus.reduce((s, m) => s + m.paidAmount, 0);
+  const expectedTotal = members.length * FIXED_AMOUNT;
+
+  // Mark a single member as paid
+  const handleMarkPaid = async (member) => {
+    const receiptNo = (receiptInputs[member.id] || '').trim();
+    if (!receiptNo) {
+      addToast(`Receipt number required for ${member.name}!`, 'warning');
+      return;
+    }
+
+    const newCollection = {
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      memberId: member.id,
+      memberName: member.name,
+      amount: FIXED_AMOUNT,
+      source: 'Monthly Collection',
+      note: `Fixed monthly collection - ${MONTHS[filterMonth]} ${filterYear}`,
+      receiptNo,
+      date: new Date(filterYear, filterMonth, new Date().getDate()).toISOString().split('T')[0]
+    };
+
+    const success = await bulkAddCollections([newCollection]);
+    if (success) {
+      addToast(`${member.name} marked as Paid (Rs. ${FIXED_AMOUNT}) ✓`, 'success');
+      setReceiptInputs(prev => ({ ...prev, [member.id]: '' }));
+    } else {
+      addToast('Failed to save — try again!', 'danger');
+    }
+  };
+
+  // Unmark (mark as unpaid) — removes the collection entry from local state
+  // Note: actual deletion from Google Sheets must be done manually
+  const handleMarkUnpaid = async (member) => {
+    if (!member.collectionId) {
+      addToast(`${member.name} has no collection to remove`, 'info');
+      return;
+    }
+    if (!window.confirm(`Mark ${member.name} as UNPAID for ${MONTHS[filterMonth]} ${filterYear}?\n\nNote: This removes the entry from local view. To permanently delete from Google Sheets, do it manually.`)) {
+      return;
+    }
+
+    // Update the collection to set amount=0 and note as cancelled
+    // (we can't delete via API, so we mark it as cancelled)
+    const success = await updateCollection(member.collectionId, {
+      amount: 0,
+      note: `CANCELLED — ${MONTHS[filterMonth]} ${filterYear}`,
+      receiptNo: ''
+    });
+
+    if (success) {
+      addToast(`${member.name} marked as Unpaid ✗`, 'info');
+    } else {
+      addToast('Failed to update — try again!', 'danger');
+    }
+  };
+
+  // Quick fill: auto-generate receipt number
+  const handleAutoReceipt = (memberId) => {
+    const auto = `R${filterYear}${String(filterMonth + 1).padStart(2, '0')}${String(memberId).slice(-3)}`;
+    setReceiptInputs(prev => ({ ...prev, [memberId]: auto }));
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="admin-card">
+        <div className="admin-card-header">
+          <h3>📅 Fixed Monthly Collection ({MONTHS[filterMonth]} {filterYear})</h3>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="badge badge-success" style={{ fontSize: '13px', padding: '6px 12px' }}>
+              ✓ {paidCount} Paid
+            </span>
+            <span className="badge badge-danger" style={{ fontSize: '13px', padding: '6px 12px' }}>
+              ✗ {unpaidCount} Pending
+            </span>
+            <span className="badge badge-gold" style={{ fontSize: '13px', padding: '6px 12px' }}>
+              ₹{totalCollected.toLocaleString('en-IN')} / ₹{expectedTotal.toLocaleString('en-IN')}
+            </span>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="filters-row" style={{ marginBottom: '12px' }}>
+          <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))}>
+            {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+          </select>
+          <select value={filterYear} onChange={e => setFilterYear(Number(e.target.value))}>
+            {[CURRENT_YEAR - 3, CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map(y =>
+              <option key={y} value={y}>{y}</option>
+            )}
+          </select>
+          <input
+            className="search-input"
+            placeholder="🔍 Search member..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ maxWidth: '200px' }}
+          />
+        </div>
+
+        {/* Progress bar */}
+        <div style={{ marginBottom: '16px', padding: '10px 14px', background: 'rgba(212,160,23,0.08)', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '12px' }}>
+            <span style={{ color: '#888' }}>Collection Progress</span>
+            <span style={{ fontWeight: '600', color: '#800000' }}>
+              {Math.round((paidCount / Math.max(members.length, 1)) * 100)}%
+            </span>
+          </div>
+          <div style={{ height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              width: `${(paidCount / Math.max(members.length, 1)) * 100}%`,
+              background: 'linear-gradient(90deg, #00B894, #00cec9)',
+              transition: 'width 0.5s ease',
+              borderRadius: '4px'
+            }}></div>
+          </div>
+        </div>
+
+        {members.length === 0 ? (
+          <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>
+            No members yet. Add members first from the Members tab!
+          </p>
+        ) : filtered.length === 0 ? (
+          <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>
+            No members match your search.
+          </p>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Member Name</th>
+                  <th>Father</th>
+                  <th>Phone</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Receipt No.</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((m, i) => (
+                  <tr key={m.id} style={{ background: m.paid ? 'rgba(0,184,148,0.05)' : 'transparent' }}>
+                    <td>{i + 1}</td>
+                    <td>
+                      <strong>{m.name}</strong>
+                      {m.father && <div style={{ fontSize: '11px', color: '#888' }}>{m.father}</div>}
+                    </td>
+                    <td>{m.father || '-'}</td>
+                    <td>{m.phone || '-'}</td>
+                    <td>
+                      {m.paid ? (
+                        <strong style={{ color: '#00B894' }}>₹{m.paidAmount.toLocaleString('en-IN')}</strong>
+                      ) : (
+                        <span style={{ color: '#E17055' }}>₹{FIXED_AMOUNT.toLocaleString('en-IN')}</span>
+                      )}
+                    </td>
+                    <td>
+                      {m.paid
+                        ? <span className="badge badge-success">✓ Paid</span>
+                        : <span className="badge badge-danger">✗ Pending</span>
+                      }
+                      {m.paid && m.receiptNo && (
+                        <div style={{ fontSize: '10px', color: '#888', marginTop: '2px' }}>
+                          Receipt: {m.receiptNo}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      {m.paid ? (
+                        <span style={{ fontSize: '12px', color: '#888' }}>{m.receiptNo || '—'}</span>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            value={receiptInputs[m.id] || ''}
+                            onChange={e => setReceiptInputs(prev => ({ ...prev, [m.id]: e.target.value }))}
+                            placeholder="Receipt #"
+                            style={{
+                              padding: '4px 8px',
+                              fontSize: '11px',
+                              width: '110px',
+                              borderRadius: '4px',
+                              border: '1px solid var(--border)',
+                              background: 'rgba(255,255,255,0.05)'
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && (receiptInputs[m.id] || '').trim()) {
+                                handleMarkPaid(m);
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={() => handleAutoReceipt(m.id)}
+                            title="Auto-generate receipt number"
+                            style={{
+                              padding: '4px 6px',
+                              fontSize: '11px',
+                              background: 'rgba(108,92,231,0.2)',
+                              border: '1px solid rgba(108,92,231,0.4)',
+                              borderRadius: '4px',
+                              color: '#a29bfe',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🎲
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      {m.paid ? (
+                        <button
+                          onClick={() => handleMarkUnpaid(m)}
+                          className="btn-action"
+                          style={{
+                            background: 'rgba(225,112,85,0.15)',
+                            color: '#E17055',
+                            border: '1px solid rgba(225,112,85,0.3)',
+                            padding: '5px 10px',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            cursor: 'pointer'
+                          }}
+                          title="Mark as unpaid"
+                        >
+                          ✗ Unpaid
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleMarkPaid(m)}
+                          className="btn-action"
+                          style={{
+                            background: 'linear-gradient(135deg, #00B894, #00cec9)',
+                            color: 'white',
+                            border: 'none',
+                            padding: '5px 14px',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(0,184,148,0.3)'
+                          }}
+                          title="Mark as paid"
+                        >
+                          ✓ Mark Paid
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Footer summary */}
+        <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', fontSize: '12px', color: '#888' }}>
+          <strong>📋 How it works:</strong> Each permanent member pays ₹{FIXED_AMOUNT}/month. Enter the receipt number,
+          click "✓ Mark Paid" — done! Use 🎲 to auto-generate a receipt number.
+          To remove a payment (wrong entry), click "✗ Unpaid" — but the row in Google Sheets must be deleted manually.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ===== EXPENDITURE SECTION =====
 function ExpenditureSection() {
   const { expenditure, addExpenditure, updateExpenditure } = useData();
@@ -1329,6 +1646,136 @@ function ReportsSection() {
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ===== ANNUAL STATEMENT SECTION =====
+function AnnualStatementSection() {
+  const { members, collections, settings } = useData();
+  const { addToast } = useToast();
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [search, setSearch] = useState('');
+
+  const filteredMembers = members.filter(m =>
+    m.name?.toLowerCase().includes(search.toLowerCase()) ||
+    m.father?.toLowerCase().includes(search.toLowerCase()) ||
+    m.phone?.includes(search)
+  );
+
+  const handleGenerate = () => {
+    const member = members.find(m => String(m.id) === String(selectedMemberId));
+    if (!member) {
+      addToast('Please select a member first!', 'warning');
+      return;
+    }
+    try {
+      generateAnnualStatement({ member, collections, year, settings });
+      addToast(`Statement generated for ${member.name} (${year})`, 'success');
+    } catch (e) {
+      console.error('Statement error:', e);
+      addToast('Failed to generate statement. Allow popups and try again.', 'danger');
+    }
+  };
+
+  const handleGenerateBulk = () => {
+    if (members.length === 0) {
+      addToast('No members to generate statements for!', 'warning');
+      return;
+    }
+    try {
+      generateBulkStatements({ members, collections, year, settings });
+      addToast(`Bulk generation started for ${members.length} members`, 'info');
+    } catch (e) {
+      console.error('Bulk statement error:', e);
+      addToast('Failed to start bulk generation. Allow popups.', 'danger');
+    }
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="admin-card">
+        <div className="admin-card-header">
+          <h3>📑 Annual Member Statement ({year})</h3>
+          <select
+            value={year}
+            onChange={e => setYear(Number(e.target.value))}
+            style={{ maxWidth: '120px' }}
+          >
+            {[CURRENT_YEAR - 3, CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map(y =>
+              <option key={y} value={y}>{y}</option>
+            )}
+          </select>
+        </div>
+
+        <div style={{ padding: '20px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', marginBottom: '20px' }}>
+          <h4 style={{ color: 'var(--gold)', marginBottom: '12px' }}>📄 Generate Single Member Statement</h4>
+          <p style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>
+            Select a member and click "Generate PDF". Opens in a new window — print or save as PDF.
+            Includes month-wise breakdown, totals, pending dues, and signature section.
+          </p>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              className="search-input"
+              placeholder="🔍 Search member..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ maxWidth: '180px' }}
+            />
+            <select
+              value={selectedMemberId}
+              onChange={e => setSelectedMemberId(e.target.value)}
+              style={{ flex: 1, minWidth: '200px' }}
+            >
+              <option value="">-- Select Member ({filteredMembers.length}) --</option>
+              {filteredMembers.map(m => (
+                <option key={m.id} value={m.id}>{m.name}{m.father ? ` (S/o ${m.father})` : ''}</option>
+              ))}
+            </select>
+            <button className="btn-primary" onClick={handleGenerate}>
+              📄 Generate PDF
+            </button>
+          </div>
+        </div>
+
+        <div style={{ padding: '20px', background: 'rgba(108,92,231,0.08)', borderRadius: '12px', border: '1px solid rgba(108,92,231,0.2)', marginBottom: '20px' }}>
+          <h4 style={{ color: '#a29bfe', marginBottom: '12px' }}>📦 Bulk Generate — All Members</h4>
+          <p style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>
+            Generates annual statements for all {members.length} members one by one.
+            <strong style={{ color: '#FDCB6E' }}> ⚠️ Allow popups</strong> for this site, otherwise only the first statement will open.
+            Each statement opens with a 1.5 second delay to avoid popup blocking.
+          </p>
+          <button
+            onClick={handleGenerateBulk}
+            style={{
+              padding: '12px 24px',
+              background: 'linear-gradient(135deg, #6c5ce7, #5a4bd1)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '10px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              boxShadow: '0 4px 15px rgba(108,92,231,0.4)'
+            }}
+          >
+            📦 Generate {members.length} Statements
+          </button>
+        </div>
+
+        <div style={{ padding: '16px', background: 'rgba(0,184,148,0.08)', borderRadius: '12px', border: '1px solid rgba(0,184,148,0.2)' }}>
+          <h4 style={{ color: '#00B894', marginBottom: '8px' }}>💡 What's in the statement?</h4>
+          <ul style={{ fontSize: '13px', color: '#888', paddingLeft: '20px', lineHeight: '1.8' }}>
+            <li>Member details (name, father, phone, address, monthly fee)</li>
+            <li>Summary cards: Total paid, Months paid, Pending dues, Donations</li>
+            <li>Month-wise payment table with dates, amounts, receipt numbers</li>
+            <li>Payment summary: Monthly collections vs donations vs other</li>
+            <li>Signature lines for member and authorized signatory</li>
+            <li>Print-friendly A4 layout — save as PDF from print dialog</li>
+          </ul>
+        </div>
       </div>
     </div>
   );
@@ -2043,13 +2490,16 @@ function NotificationsSection() {
 // ===== MAIN ADMIN COMPONENT =====
 function Admin() {
   const navigate = useNavigate();
-  const { syncStatus, settings, loadFromGoogleSheet, syncToGoogleSheet, members, collections, expenditure, saving, initialLoadDone } = useData();
+  const { syncStatus, settings, loadFromGoogleSheet, syncToGoogleSheet, members, collections, expenditure, saving, initialLoadDone, getPendingCount } = useData();
   const { lang, setLang, t } = useLang();
   const { theme, toggleTheme } = useTheme();
+  const { canInstall, isInstalled, promptInstall } = usePWAInstall();
+  const { status: swStatus, updateAvailable, applyUpdate } = useServiceWorker();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
   const [searchResults, setSearchResults] = useState(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   // Global search functionality
   const handleGlobalSearch = (query) => {
@@ -2084,6 +2534,29 @@ function Admin() {
     }
   }, [navigate]);
 
+  // Show PWA install banner after 30 seconds if installable
+  useEffect(() => {
+    if (canInstall && !isInstalled) {
+      const dismissed = sessionStorage.getItem('svaks_install_dismissed');
+      if (dismissed !== 'yes') {
+        const timer = setTimeout(() => setShowInstallBanner(true), 30000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [canInstall, isInstalled]);
+
+  const handleInstall = async () => {
+    const result = await promptInstall();
+    if (result.outcome === 'accepted') {
+      setShowInstallBanner(false);
+    }
+  };
+
+  const handleDismissInstall = () => {
+    setShowInstallBanner(false);
+    sessionStorage.setItem('svaks_install_dismissed', 'yes');
+  };
+
   const handleLogout = () => {
     sessionStorage.removeItem('svaks_admin');
     navigate('/');
@@ -2091,12 +2564,14 @@ function Admin() {
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'monthly-fixed', label: 'Monthly ₹200', icon: '📅' },
     { id: 'members', label: 'Members', icon: '👥' },
     { id: 'collections', label: 'Collections', icon: '💰' },
     { id: 'expenditure', label: 'Expenditure', icon: '📋' },
     { id: 'notifications', label: 'Notices', icon: '📢' },
     { id: 'gallery', label: 'Gallery', icon: '📸' },
     { id: 'reports', label: 'Reports', icon: '📑' },
+    { id: 'annual-statement', label: 'Statement', icon: '📄' },
     { id: 'committee', label: 'Committee', icon: '🏛️' },
     { id: 'settings', label: 'Settings', icon: '⚙️' }
   ];
@@ -2104,12 +2579,14 @@ function Admin() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <DashboardSection />;
+      case 'monthly-fixed': return <MonthlyFixedCollectionSection />;
       case 'members': return <MembersSection />;
       case 'collections': return <CollectionsSection />;
       case 'expenditure': return <ExpenditureSection />;
       case 'notifications': return <NotificationsSection />;
       case 'gallery': return <GallerySection />;
       case 'reports': return <ReportsSection />;
+      case 'annual-statement': return <AnnualStatementSection />;
       case 'committee': return <CommitteeSection />;
       case 'settings': return <SettingsSection />;
       default: return <DashboardSection />;
@@ -2128,6 +2605,98 @@ function Admin() {
   return (
     <div className="admin-layout">
       <div className={`sidebar-overlay ${mobileOpen ? 'open' : ''}`} onClick={() => setMobileOpen(false)}></div>
+
+      {/* PWA Install Banner */}
+      {showInstallBanner && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0,
+          background: 'linear-gradient(135deg, #6c5ce7, #5a4bd1)',
+          color: 'white',
+          padding: '12px 20px',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          fontSize: '14px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '24px' }}>📱</span>
+            <div>
+              <div style={{ fontWeight: '600' }}>Install SVAKS App</div>
+              <div style={{ fontSize: '12px', opacity: 0.9 }}>Works offline, faster, app-like experience</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={handleInstall}
+              style={{
+                padding: '6px 16px',
+                background: 'white',
+                color: '#6c5ce7',
+                border: 'none',
+                borderRadius: '6px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                fontSize: '13px'
+              }}
+            >
+              Install
+            </button>
+            <button
+              onClick={handleDismissInstall}
+              style={{
+                padding: '6px 12px',
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Update Available Banner */}
+      {updateAvailable && (
+        <div style={{
+          position: 'fixed',
+          top: showInstallBanner ? '56px' : '0',
+          left: 0, right: 0,
+          background: 'linear-gradient(135deg, #00B894, #00cec9)',
+          color: 'white',
+          padding: '8px 20px',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px',
+          fontSize: '13px'
+        }}>
+          <span>🔄 New version available!</span>
+          <button
+            onClick={applyUpdate}
+            style={{
+              padding: '4px 14px',
+              background: 'white',
+              color: '#00B894',
+              border: 'none',
+              borderRadius: '4px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            Update Now
+          </button>
+        </div>
+      )}
 
       <aside className={`admin-sidebar ${mobileOpen ? 'open' : ''}`}>
         <div className="admin-sidebar-header">
@@ -2189,12 +2758,19 @@ function Admin() {
           </div>
           {/* Cloud Sync Status Indicator */}
           <>
-            <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' || saving ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' ? 'rgba(225,112,85,0.15)' : syncStatus === 'loading' ? 'rgba(108,92,231,0.15)' : 'rgba(255,255,255,0.05)' }}>
-              <span>{syncStatus === 'syncing' || saving ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : syncStatus === 'loading' ? '⏳' : '☁️'}</span>
-              <span style={{ color: syncStatus === 'syncing' || saving ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' ? '#E17055' : syncStatus === 'loading' ? '#a29bfe' : 'rgba(255,255,255,0.5)' }}>
-                {saving ? 'Saving to cloud...' : syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Cloud synced ✓' : syncStatus === 'error' ? 'Sync error' : syncStatus === 'loading' ? 'Loading from cloud...' : 'Cloud ready'}
+            <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' || saving ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' ? 'rgba(225,112,85,0.15)' : syncStatus === 'loading' ? 'rgba(108,92,231,0.15)' : syncStatus === 'offline' ? 'rgba(253,203,110,0.15)' : 'rgba(255,255,255,0.05)' }}>
+              <span>{syncStatus === 'syncing' || saving ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : syncStatus === 'loading' ? '⏳' : syncStatus === 'offline' ? '📡' : '☁️'}</span>
+              <span style={{ color: syncStatus === 'syncing' || saving ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' ? '#E17055' : syncStatus === 'loading' ? '#a29bfe' : syncStatus === 'offline' ? '#FDCB6E' : 'rgba(255,255,255,0.5)' }}>
+                {saving ? 'Saving to cloud...' : syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Cloud synced ✓' : syncStatus === 'error' ? 'Sync error' : syncStatus === 'loading' ? 'Loading from cloud...' : syncStatus === 'offline' ? 'Offline mode' : 'Cloud ready'}
               </span>
             </div>
+            {/* Offline queue indicator */}
+            {getPendingCount() > 0 && (
+              <div style={{ marginBottom: '12px', padding: '6px 10px', borderRadius: '6px', fontSize: '11px', background: 'rgba(253,203,110,0.15)', border: '1px solid rgba(253,203,110,0.4)', color: '#FDCB6E', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>⏳</span>
+                <span>{getPendingCount()} save(s) queued — will sync when online</span>
+              </div>
+            )}
             <button
               onClick={loadFromGoogleSheet}
               style={{ marginBottom: '12px', padding: '6px 10px', fontSize: '11px', background: 'rgba(0,184,148,0.2)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '6px', color: '#00B894', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', width: '100%' }}
