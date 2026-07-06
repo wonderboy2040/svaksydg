@@ -116,7 +116,7 @@ export function generateAnnualStatement({ member, collections, year, settings })
     }
   }
 
-  const samajName = settings?.appName || 'Soma Vamshi Aarya Kshthriya Samaj';
+  const samajName = settings?.appName || 'Somavamsha Aarya Kshthriya Samaj';
   const location = settings?.location || 'Yadgir';
   const generatedDate = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 

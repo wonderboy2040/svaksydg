@@ -212,7 +212,7 @@ function Home() {
               <img src={samajMataImg} alt="Samaj Mata" className="hero-avatar-img" />
             </div>
           </div>
-          <h1 className="hero-english-title">Soma Vamshi Aarya Kshthriya Samaj</h1>
+          <h1 className="hero-english-title">Somavamsha Aarya Kshthriya Samaj</h1>
           <p className="hero-subtitle">{t('hero.subtitle')}</p>
           <p className="hero-description">
             {t('hero.description')}
@@ -450,7 +450,7 @@ function Home() {
 
       <footer className="home-footer">
         <div className="footer-om">ॐ</div>
-        <p>© 2026 {settings.appName || 'Soma Vamshi Aarya Kshthriya Samaj'}, {settings.location || 'Yadgir'} | <Link to="/admin-login">{t('nav.adminPanel')}</Link></p>
+        <p>© 2026 {settings.appName || 'Somavamsha Aarya Kshthriya Samaj'}, {settings.location || 'Yadgir'} | <Link to="/admin-login">{t('nav.adminPanel')}</Link></p>
         <p className="footer-mantra">{t('footer.mantra')}</p>
       </footer>
     </div>

@@ -92,7 +92,7 @@ ${text}
 📅 ${date || ''}
 
 — SVAKS Yadgir
-(Soma Vamshi Aarya Kshthriya Samaj)`;
+(Somavamsha Aarya Kshthriya Samaj)`;
 }
 
 /**

@@ -5,7 +5,7 @@ import { enqueue, replayQueue, getPendingCount, clearQueue } from './utils/offli
 const DataContext = createContext(null);
 
 const defaultSettings = {
-        appName: 'Soma Vamshi Aarya Kshthriya Samaj',
+        appName: 'Somavamsha Aarya Kshthriya Samaj',
         location: 'Yadgir',
         monthlyFee: 100,
         pin: '',

@@ -1,4 +1,4 @@
-# SVAKS - Soma Vamshi Aarya Kshthriya Samaj, Yadgir
+# SVAKS - Somavamsha Aarya Kshthriya Samaj, Yadgir
 
 Community management platform for member collections, expenditures, and samaj organization.
 
