@@ -31,14 +31,31 @@ const defaultGallery = [];
 // ===================================
 // VALIDATION HELPERS
 // ===================================
+
+// Generate a unique integer ID (avoids floating-point issues of Date.now() + Math.random())
+function generateId() {
+  // Prefer crypto.randomUUID() when available (returns string, but we hash to int)
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    // Use the first 13 hex chars of UUID → ~48-bit integer
+    const hex = crypto.randomUUID().replace(/-/g, '').slice(0, 13);
+    return parseInt(hex, 16);
+  }
+  // Fallback: timestamp + random suffix (kept as integer)
+  return Date.now() * 1000 + Math.floor(Math.random() * 1000);
+}
+
 const validateMember = (member) => {
-        const safeId = Number(member?.id) || Date.now() + Math.random();
+        const safeId = Number(member?.id) || generateId();
         const safeName = String(member?.name || '').trim().substring(0, 100);
         const safeFather = String(member?.father || '').trim().substring(0, 100);
         const safePhone = String(member?.phone || '').trim().replace(/[^\d+-]/g, '').substring(0, 20);
         const safeAddress = String(member?.address || '').trim().substring(0, 200);
         const safeOccupation = String(member?.occupation || '').trim().substring(0, 100);
-        const safeMonthlyFee = Math.abs(Number(member?.monthlyFee)) || 100;
+        // Allow monthlyFee of 0 (lifetime/honorary members) — only fall back to 100 when undefined/NaN
+        const rawFee = Number(member?.monthlyFee);
+        const safeMonthlyFee = (!isNaN(rawFee) && member?.monthlyFee !== undefined && member?.monthlyFee !== null && member?.monthlyFee !== '')
+                ? Math.abs(rawFee)
+                : 100;
         const safeOther = String(member?.other || '').trim().substring(0, 500);
         const safeJoinedDate = member?.joinedDate || new Date().toISOString().split('T')[0];
         const finalName = safeName || 'Unknown Member';
@@ -57,7 +74,7 @@ const validateMember = (member) => {
 };
 
 const validateCollection = (collection) => {
-        const safeId = Number(collection?.id) || Date.now() + Math.random();
+        const safeId = Number(collection?.id) || generateId();
         const safeMemberId = collection?.memberId ? Number(collection.memberId) : null;
         const safeMemberName = String(collection?.memberName || '').trim().substring(0, 100);
         const safeAmount = Math.abs(Number(collection?.amount)) || 0;
@@ -89,7 +106,7 @@ const validateCollection = (collection) => {
 };
 
 const validateExpenditure = (expenditure) => {
-        const safeId = Number(expenditure?.id) || Date.now() + Math.random();
+        const safeId = Number(expenditure?.id) || generateId();
         const safeCategory = String(expenditure?.category || 'Other').trim().substring(0, 50);
         const safeAmount = Math.abs(Number(expenditure?.amount)) || 0;
         const safeDescription = String(expenditure?.description || '').trim().substring(0, 200);
@@ -115,7 +132,7 @@ const validateExpenditure = (expenditure) => {
 };
 
 const validateNotification = (notification) => ({
-        id: Number(notification.id) || Date.now(),
+        id: Number(notification.id) || generateId(),
         title: String(notification.title || '').trim().substring(0, 100),
         text: String(notification.text || '').trim().substring(0, 500),
         date: notification.date || new Date().toLocaleDateString('en-IN'),
@@ -123,7 +140,7 @@ const validateNotification = (notification) => ({
 });
 
 const validateCommittee = (committee) => ({
-        id: Number(committee.id) || Date.now(),
+        id: Number(committee.id) || generateId(),
         position: String(committee.position || '').trim().substring(0, 50),
         name: String(committee.name || '').trim().substring(0, 100),
         photo: String(committee.photo || '').trim().substring(0, 1000),
@@ -310,7 +327,7 @@ export function DataProvider({ children }) {
 
         // ===================================
         // SAVE & VERIFY — The core save flow
-        // Push to cloud → wait → re-fetch to confirm
+        // Push to cloud → wait → re-fetch to verify
         // If offline, queue the save for later replay.
         // ===================================
         const saveAndVerify = useCallback(async (newData) => {
@@ -348,8 +365,25 @@ export function DataProvider({ children }) {
                 // Step 3: Re-fetch from cloud to verify
                 const cloud = await fetchCloudData(false);
                 if (cloud) {
-                        applyCloudData(cloud);
-                        console.log('[SVAKS] Save verified — cloud data re-fetched');
+                        // CRITICAL: Verify the cloud actually received our data.
+                        // Because no-cors always returns opaque, pushToCloud returns true
+                        // even on Apps Script errors. So we compare the cloud's
+                        // _syncVersion to the version we pushed. If cloud didn't update,
+                        // our push silently failed — keep local data and queue for retry.
+                        const pushedVersion = Number(newData._syncVersion) || 0;
+                        const cloudVersion = Number(cloud._syncVersion) || 0;
+
+                        if (cloudVersion >= pushedVersion) {
+                                applyCloudData(cloud);
+                                console.log('[SVAKS] Save verified — cloud data re-fetched');
+                        } else {
+                                // Cloud didn't get our update — silent failure
+                                console.warn('[SVAKS] Cloud version is stale — push may have failed silently');
+                                setData(newData); // keep our local data
+                                setSyncStatus('error');
+                                setSyncError('Cloud sync may have failed — your changes are saved locally and will retry.');
+                                enqueue({ type: 'save', payload: newData });
+                        }
                 } else {
                         // Push was done, but couldn't verify. Apply local data for now.
                         setData(newData);
@@ -406,7 +440,12 @@ export function DataProvider({ children }) {
 
         // ===================================
         // POLL FOR CHANGES (every 15 seconds)
+        // Uses a ref for syncVersion so the interval doesn't re-subscribe
+        // on every data change (which would reset the timer constantly).
         // ===================================
+        const syncVersionRef = useRef(0);
+        useEffect(() => { syncVersionRef.current = data._syncVersion || 0; }, [data._syncVersion]);
+
         useEffect(() => {
                 if (!CLOUD_URL || !initialLoadDone) return;
 
@@ -415,7 +454,7 @@ export function DataProvider({ children }) {
                         if (!cloud) return;
 
                         const cloudVersion = Number(cloud._syncVersion) || 0;
-                        const localVersion = data._syncVersion || 0;
+                        const localVersion = syncVersionRef.current;
 
                         if (cloudVersion > localVersion) {
                                 console.log('[SVAKS] Poll: New data detected, updating...', { cloudVersion, localVersion });
@@ -423,12 +462,12 @@ export function DataProvider({ children }) {
                         }
                 };
 
-                pollRef.current = setInterval(poll, SYNC_INTERVAL);
+                const intervalId = setInterval(poll, SYNC_INTERVAL);
 
                 return () => {
-                        if (pollRef.current) clearInterval(pollRef.current);
+                        clearInterval(intervalId);
                 };
-        }, [fetchCloudData, data._syncVersion, applyCloudData, initialLoadDone]);
+        }, [fetchCloudData, applyCloudData, initialLoadDone]);
 
         // ===================================
         // TAB VISIBILITY — refresh on tab focus
@@ -687,6 +726,10 @@ export function DataProvider({ children }) {
                 if (cloud) {
                         applyCloudData(cloud);
                         console.log('[SVAKS] Data refreshed from cloud!');
+                } else {
+                        // Don't leave the UI stuck in 'loading' state on failure
+                        setSyncStatus('error');
+                        setSyncError('Refresh failed — check your internet connection and try again.');
                 }
         }, [fetchCloudData, applyCloudData]);
 
@@ -735,22 +778,36 @@ export function DataProvider({ children }) {
                 reader.onload = async (e) => {
                         try {
                                 const imp = JSON.parse(e.target.result);
+                                // Validate every array field — never trust imported JSON
                                 const newData = {
                                         _syncVersion: imp._syncVersion || Date.now(),
-                                        members: imp.members || [],
-                                        collections: imp.collections || [],
-                                        expenditure: imp.expenditure || [],
-                                        committee: imp.committee || defaultCommittee.map(c => ({ ...c })),
-                                        notifications: imp.notifications || [],
-                                        gallery: imp.gallery || [],
-                                        settings: { ...defaultSettings, ...(imp.settings || {}) }
+                                        members: Array.isArray(imp.members) ? imp.members.map(validateMember) : [],
+                                        collections: Array.isArray(imp.collections) ? imp.collections.map(validateCollection) : [],
+                                        expenditure: Array.isArray(imp.expenditure) ? imp.expenditure.map(validateExpenditure) : [],
+                                        committee: Array.isArray(imp.committee) && imp.committee.length > 0
+                                                ? defaultCommittee.map(dc => {
+                                                        const cloudC = imp.committee.find(c => c.id === dc.id || c.position === dc.position);
+                                                        return cloudC && cloudC.name ? { ...dc, ...validateCommittee({ ...dc, ...cloudC }) } : dc;
+                                                })
+                                                : defaultCommittee.map(c => ({ ...c })),
+                                        notifications: Array.isArray(imp.notifications) ? imp.notifications.map(validateNotification) : [],
+                                        gallery: Array.isArray(imp.gallery) ? imp.gallery : [],
+                                        settings: {
+                                                ...defaultSettings,
+                                                ...(imp.settings && !Array.isArray(imp.settings) && typeof imp.settings === 'object' ? imp.settings : {})
+                                        }
                                 };
                                 setData(newData);
                                 await saveAndVerify(newData);
                                 console.log('[SVAKS] Data imported and saved to cloud!');
-                        } catch {
-                                console.error('Invalid JSON file!');
+                        } catch (err) {
+                                console.error('Invalid JSON file!', err);
+                                alert('Import failed: the file is not valid JSON or is corrupted.');
                         }
+                };
+                reader.onerror = () => {
+                        console.error('File read error');
+                        alert('Could not read the file. Please try again.');
                 };
                 reader.readAsText(file);
         }, [saveAndVerify]);

@@ -131,7 +131,7 @@ function exportReport(members, collections, expenditure, memberStatus, month, ye
   </div>
 
   <div class="header">
-    <span class="om">&#2368;</span>
+    <span class="om">&#2384;</span>
     <h1>Somavamsha Aarya Kshthriya Samaj, Yadgir</h1>
     <div class="sub">MONTHLY REPORT</div>
     <div class="month">${escapeHtml(monthName)} ${year}</div>
@@ -167,7 +167,7 @@ function exportReport(members, collections, expenditure, memberStatus, month, ye
           ? '<span class="ok">Paid &#10004;</span>'
           : '<span class="no">Pending &#10008;</span>'
         }</td>
-      <td class="amt">Rs.${m.paidAmount.toLocaleString('en-IN')}</td></tr>`).join('')}
+      <td class="amt">Rs.${(Number(m.paidAmount) || 0).toLocaleString('en-IN')}</td></tr>`).join('')}
   </table>
 
   <h2>Collection Details</h2>
@@ -175,7 +175,7 @@ function exportReport(members, collections, expenditure, memberStatus, month, ye
     <tr><th>#</th><th>Date</th><th>Member</th><th class="amt">Amount</th><th>Source</th><th>Note</th></tr>
     ${collections.length === 0
       ? '<tr><td colspan="6" style="text-align:center;color:#999;padding:12px">Koi collection nahi</td></tr>'
-      : collections.map((c, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(c.date || '-')}</td><td>${escapeHtml(c.memberName || '-')}</td><td class="amt">Rs.${Number(c.amount).toLocaleString('en-IN')}</td><td>${escapeHtml(sourceNames[c.source] || c.source || '-')}</td><td>${escapeHtml(c.note || '-')}</td></tr>`).join('')}
+      : collections.map((c, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(c.date || '-')}</td><td>${escapeHtml(c.memberName || '-')}</td><td class="amt">Rs.${(Number(c.amount) || 0).toLocaleString('en-IN')}</td><td>${escapeHtml(sourceNames[c.source] || c.source || '-')}</td><td>${escapeHtml(c.note || '-')}</td></tr>`).join('')}
   </table>
 
   <h2>Expenditure Details</h2>
@@ -183,7 +183,7 @@ function exportReport(members, collections, expenditure, memberStatus, month, ye
     <tr><th>#</th><th>Date</th><th>Category</th><th class="amt">Amount</th><th>Description</th></tr>
     ${expenditure.length === 0
       ? '<tr><td colspan="5" style="text-align:center;color:#999;padding:12px">Koi kharcha nahi</td></tr>'
-      : expenditure.map((e, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(e.date || '-')}</td><td>${escapeHtml(catNames[e.category] || e.category || '-')}</td><td class="amt">Rs.${Number(e.amount).toLocaleString('en-IN')}</td><td>${escapeHtml(e.description || '-')}</td></tr>`).join('')}
+      : expenditure.map((e, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(e.date || '-')}</td><td>${escapeHtml(catNames[e.category] || e.category || '-')}</td><td class="amt">Rs.${(Number(e.amount) || 0).toLocaleString('en-IN')}</td><td>${escapeHtml(e.description || '-')}</td></tr>`).join('')}
   </table>
 
   <div class="footer">

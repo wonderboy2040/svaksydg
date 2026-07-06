@@ -148,6 +148,8 @@ self.addEventListener('push', (event) => {
 // Notification click — open the app
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  // The URL was stored on the Notification's data, not on the event
+  const targetUrl = (event.notification && event.notification.data) || '/';
   event.waitUntil(
     self.clients.matchAll({ type: 'window' }).then(clients => {
       // Focus existing window if open
@@ -158,7 +160,7 @@ self.addEventListener('notificationclick', (event) => {
       }
       // Otherwise open new window
       if (self.clients.openWindow) {
-        return self.clients.openWindow(event.data || '/');
+        return self.clients.openWindow(targetUrl);
       }
     })
   );

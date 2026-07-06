@@ -73,7 +73,8 @@ export function usePWAInstall() {
 
 // ===========================================
 // SW Registration Hook
-// Registers the service worker on mount and reports status
+// Reports SW status. Registration itself is done in main.jsx to avoid
+// duplicate registrations — this hook only attaches update listeners.
 // ===========================================
 export function useServiceWorker() {
   const [status, setStatus] = useState('unregistered'); // 'unregistered' | 'registering' | 'registered' | 'error'
@@ -85,53 +86,80 @@ export function useServiceWorker() {
       return;
     }
 
-    // Only register in production (Vite dev server has its own HMR SW)
+    // Only proceed in production (Vite dev server has its own HMR SW)
     if (import.meta.env.DEV) {
       setStatus('registered'); // Skip in dev
       return;
     }
 
-    setStatus('registering');
-    navigator.serviceWorker.register('/sw.js', { scope: '/' })
-      .then((registration) => {
-        console.log('[SVAKS SW] Registered with scope:', registration.scope);
-        setStatus('registered');
-
-        // Listen for updates
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (newWorker) {
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                // New version available
-                setUpdateAvailable(true);
-              }
-            });
-          }
-        });
-
-        // Check for updates every hour
-        setInterval(() => {
-          registration.update().catch(() => {});
-        }, 60 * 60 * 1000);
-      })
-      .catch((error) => {
-        console.error('[SVAKS SW] Registration failed:', error);
-        setStatus('error');
-      });
-
-    // Listen for messages from SW (e.g., background sync trigger)
-    const handleMessage = (event) => {
-      if (event.data && event.data.type === 'BACKGROUND_SYNC') {
-        console.log('[SVAKS PWA] Background sync event received');
-        // Dispatch a custom event the app can listen for
-        window.dispatchEvent(new CustomEvent('svaks-background-sync'));
+    // Get the existing registration (registered by main.jsx on window load)
+    navigator.serviceWorker.getRegistration('/').then((registration) => {
+      if (!registration) {
+        // SW not yet registered — main.jsx will register on load; poll briefly
+        setStatus('registering');
+        const retryTimer = setTimeout(() => {
+          navigator.serviceWorker.getRegistration('/').then((reg) => {
+            if (reg) {
+              setStatus('registered');
+              attachListeners(reg);
+            } else {
+              setStatus('error');
+            }
+          });
+        }, 2000);
+        return () => clearTimeout(retryTimer);
       }
-    };
-    navigator.serviceWorker.addEventListener('message', handleMessage);
+      setStatus('registered');
+      attachListeners(registration);
+    }).catch((error) => {
+      console.error('[SVAKS SW] getRegistration failed:', error);
+      setStatus('error');
+    });
+
+    function attachListeners(registration) {
+      const handleUpdateFound = () => {
+        const newWorker = registration.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              setUpdateAvailable(true);
+            }
+          });
+        }
+      };
+      registration.addEventListener('updatefound', handleUpdateFound);
+
+      // Periodic update check — store interval ID so we can clear it
+      const updateInterval = setInterval(() => {
+        registration.update().catch(() => {});
+      }, 60 * 60 * 1000);
+
+      // Listen for messages from SW (e.g., background sync trigger)
+      const handleMessage = (event) => {
+        if (event.data && event.data.type === 'BACKGROUND_SYNC') {
+          console.log('[SVAKS PWA] Background sync event received');
+          window.dispatchEvent(new CustomEvent('svaks-background-sync'));
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handleMessage);
+
+      // Cleanup function stored on the registration object for re-use
+      registration._svaksCleanup = () => {
+        registration.removeEventListener('updatefound', handleUpdateFound);
+        clearInterval(updateInterval);
+        navigator.serviceWorker.removeEventListener('message', handleMessage);
+      };
+    }
 
     return () => {
-      navigator.serviceWorker.removeEventListener('message', handleMessage);
+      // Best-effort cleanup — get the registration and call its cleanup if attached
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration('/').then((reg) => {
+          if (reg && typeof reg._svaksCleanup === 'function') {
+            reg._svaksCleanup();
+          }
+        }).catch(() => {});
+      }
     };
   }, []);
 
@@ -139,8 +167,17 @@ export function useServiceWorker() {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistration().then(reg => {
         if (reg && reg.waiting) {
+          // Wait for the new SW to take control before reloading
+          let reloaded = false;
+          const reloadOnce = () => {
+            if (reloaded) return;
+            reloaded = true;
+            window.location.reload();
+          };
+          navigator.serviceWorker.addEventListener('controllerchange', reloadOnce, { once: true });
+          // Safety timeout — reload after 3s even if controllerchange doesn't fire
+          setTimeout(reloadOnce, 3000);
           reg.waiting.postMessage('SKIP_WAITING');
-          window.location.reload();
         }
       });
     }

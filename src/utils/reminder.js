@@ -116,7 +116,8 @@ export function openShareUrl(url) {
  */
 export function printReceipt({ member, collection, samajName, location }) {
   const receiptDate = collection?.date || new Date().toISOString().split('T')[0];
-  const receiptNo = `SVAKS-${collection?.id || Date.now()}`;
+  // Prefer the stored receiptNo (entered by admin) — fall back to a generated one
+  const receiptNo = collection?.receiptNo || `SVAKS-${collection?.id || Date.now()}`;
   const member_name = member?.name || collection?.memberName || '—';
   const father = member?.father || '—';
   const phone = member?.phone || '—';

@@ -80,7 +80,8 @@ const translations = {
     // Admin
     'admin.loading': 'Loading cloud data...',
     'admin.refreshCloud': '🔄 Refresh from Cloud',
-    'admin.logout': '🔒 Logout',
+    'admin.logout': 'Logout',
+    'admin.logoutIcon': '🔒',
     'admin.dashboard.title': 'Dashboard',
     'admin.members.title': 'Members',
     'admin.collections.title': 'Collections',
@@ -181,7 +182,8 @@ const translations = {
     // Admin
     'admin.loading': 'क्लाउड डेटा लोड हो रहा है...',
     'admin.refreshCloud': '🔄 क्लाउड से रिफ्रेश करें',
-    'admin.logout': '🔒 लॉगआउट',
+    'admin.logout': 'लॉगआउट',
+    'admin.logoutIcon': '🔒',
     'admin.dashboard.title': 'डैशबोर्ड',
     'admin.members.title': 'सदस्य',
     'admin.collections.title': 'संग्रह',
@@ -232,10 +234,10 @@ export function LanguageProvider({ children }) {
 
   const t = (key, params = {}) => {
     let str = (translations[lang] && translations[lang][key]) || translations.en[key] || key;
-    // Simple {placeholder} substitution
+    // Use replaceAll (no regex compilation needed) — faster and safer
     if (params && typeof str === 'string') {
       Object.keys(params).forEach(p => {
-        str = str.replace(new RegExp(`\\{${p}\\}`, 'g'), params[p]);
+        str = str.split(`{${p}}`).join(String(params[p]));
       });
     }
     return str;

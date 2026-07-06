@@ -35,12 +35,6 @@ function Loading({ fullScreen = false, message = 'Loading...' }) {
         fontFamily: 'Inter, sans-serif',
         marginTop: '8px'
       }}>Please wait...</div>
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(0.95); }
-        }
-      `}</style>
     </div>
   );
 }

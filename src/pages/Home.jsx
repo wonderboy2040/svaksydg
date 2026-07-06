@@ -5,6 +5,7 @@ import { useLang } from '../i18n';
 import { useTheme } from '../utils/useTheme';
 import { getDirectImageUrl, PLACEHOLDER_IMAGE } from '../utils';
 import { getWhatsAppShareUrl, buildNoticeShareMessage, openShareUrl } from '../utils/reminder';
+import { useOnlineStatus } from '../utils/usePWA';
 import samajMataImg from '../smjmata.jpg';
 import '../styles/Home.css';
 
@@ -92,19 +93,7 @@ function Home() {
   const [visibleSections, setVisibleSections] = useState({});
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-
-  // Online/Offline detection
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
+  const isOnline = useOnlineStatus();
 
   const activeNotifs = notifications.filter(n => n.active);
 
@@ -450,7 +439,7 @@ function Home() {
 
       <footer className="home-footer">
         <div className="footer-om">ॐ</div>
-        <p>© 2026 {settings.appName || 'Somavamsha Aarya Kshthriya Samaj'}, {settings.location || 'Yadgir'} | <Link to="/admin-login">{t('nav.adminPanel')}</Link></p>
+        <p>© {new Date().getFullYear()} {settings.appName || 'Somavamsha Aarya Kshthriya Samaj'}, {settings.location || 'Yadgir'} | <Link to="/admin-login">{t('nav.adminPanel')}</Link></p>
         <p className="footer-mantra">{t('footer.mantra')}</p>
       </footer>
     </div>

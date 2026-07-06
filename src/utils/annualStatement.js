@@ -235,7 +235,7 @@ export function generateAnnualStatement({ member, collections, year, settings })
   </div>
 
   <div class="header">
-    <span class="om">&#2368;</span>
+    <span class="om">&#2384;</span>
     <h1>${escapeHtml(samajName)}</h1>
     <div class="sub">${escapeHtml(location)}</div>
     <div class="statement-title">ANNUAL MEMBER STATEMENT — ${year}</div>

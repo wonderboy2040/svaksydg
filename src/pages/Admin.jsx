@@ -29,6 +29,16 @@ const CURRENT_YEAR = new Date().getFullYear();
 const COLLECTION_SOURCES = ['Monthly Collection', 'Donation', 'Special Contribution', 'Event Income', 'Other'];
 const EXPENSE_CATEGORIES = ['Gudi Pujari', 'Cleaner', 'Milk & Curd', 'Flowers', 'SAMAJ Collector Fee', 'Admin Cost', 'Event Expense', 'Maintenance', 'Help/Support', 'Travel', 'Printing', 'Other'];
 
+// CSV cell escaping — wrap in quotes and escape internal quotes.
+// Prevents commas/quotes/newlines in names from breaking the CSV.
+const csvCell = (val) => {
+  const s = String(val == null ? '' : val);
+  if (/[",\n\r]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+};
+
 function getMonthPaymentStatus(members, collections, month, year) {
   const paid = new Set();
 
@@ -40,7 +50,19 @@ function getMonthPaymentStatus(members, collections, month, year) {
     return d;
   };
 
+  // A collection is "valid" (counts toward paid status) if it has a positive
+  // amount AND is not a cancelled entry (note starts with CANCELLED —).
+  // This prevents the "Mark Unpaid" flow from leaving phantom paid entries.
+  const isValidCollection = (c) => {
+    const amount = Number(c.amount || 0);
+    if (amount <= 0) return false;
+    const note = String(c.note || '');
+    if (note.startsWith('CANCELLED —') || note.startsWith('CANCELLED-')) return false;
+    return true;
+  };
+
   collections.forEach(c => {
+    if (!isValidCollection(c)) return;
     const d = parseDate(c.date);
     if (d && d.getMonth() === month && d.getFullYear() === year && c.memberId) {
       paid.add(c.memberId);
@@ -48,9 +70,10 @@ function getMonthPaymentStatus(members, collections, month, year) {
   });
 
   return members.map(m => {
-    // Filter collections for this member in this month
+    // Filter valid collections for this member in this month
     const memberCollections = collections.filter(c => {
       if (!c.memberId || c.memberId !== m.id) return false;
+      if (!isValidCollection(c)) return false;
       const d = parseDate(c.date);
       return d && d.getMonth() === month && d.getFullYear() === year;
     });
@@ -750,9 +773,14 @@ function MonthlyFixedCollectionSection() {
   };
 
   // For each member, check if they've paid this month/year
+  // Excludes cancelled entries (amount=0 with CANCELLED note)
   const memberStatus = members.map(m => {
     const memberCollections = collections.filter(c => {
       if (c.memberId !== m.id) return false;
+      // Exclude cancelled entries
+      const note = String(c.note || '');
+      if (note.startsWith('CANCELLED —') || note.startsWith('CANCELLED-')) return false;
+      if (Number(c.amount || 0) <= 0) return false;
       const d = parseDate(c.date);
       return d && d.getMonth() === filterMonth && d.getFullYear() === filterYear;
     });
@@ -1492,19 +1520,29 @@ function ReportsSection() {
     if (type === 'collections') {
       csvContent = 'Date,Member,Amount,Source,Note\n';
       monthCollections.forEach(c => {
-        csvContent += `${c.date || ''},${c.memberName || ''},${c.amount || 0},${c.source || ''},${c.note || ''}\n`;
+        csvContent += [csvCell(c.date), csvCell(c.memberName), csvCell(c.amount), csvCell(c.source), csvCell(c.note)].join(',') + '\n';
       });
       filename = `collections_${MONTHS[month]}_${year}.csv`;
     } else if (type === 'expenditure') {
       csvContent = 'Date,Category,Amount,Description\n';
       monthExpenditure.forEach(e => {
-        csvContent += `${e.date || ''},${e.category || ''},${e.amount || 0},${e.description || ''}\n`;
+        csvContent += [csvCell(e.date), csvCell(e.category), csvCell(e.amount), csvCell(e.description)].join(',') + '\n';
       });
       filename = `expenditure_${MONTHS[month]}_${year}.csv`;
     } else if (type === 'members') {
       csvContent = 'Name,Father,Phone,Address,Occupation,Monthly Fee,Status,Amount Paid\n';
       monthStatus.forEach(m => {
-        csvContent += `${m.name},${members.find(mem => mem.id === m.id)?.father || ''},${m.phone || ''},${members.find(mem => mem.id === m.id)?.address || ''},${members.find(mem => mem.id === m.id)?.occupation || ''},${members.find(mem => mem.id === m.id)?.monthlyFee || 0},${m.paid ? 'Paid' : 'Pending'},${m.paidAmount}\n`;
+        const member = members.find(mem => mem.id === m.id);
+        csvContent += [
+          csvCell(m.name),
+          csvCell(member?.father || ''),
+          csvCell(m.phone || ''),
+          csvCell(member?.address || ''),
+          csvCell(member?.occupation || ''),
+          csvCell(member?.monthlyFee || 0),
+          csvCell(m.paid ? 'Paid' : 'Pending'),
+          csvCell(m.paidAmount)
+        ].join(',') + '\n';
       });
       filename = `members_${MONTHS[month]}_${year}.csv`;
     }
@@ -2009,8 +2047,10 @@ function SettingsSection() {
   const handleImportFile = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Reset input so the same file can be re-imported
+      e.target.value = '';
+      addToast('Importing data — please wait...', 'info');
       importJSON(file);
-      addToast('Data import successful!', 'success');
     }
   };
 
@@ -2298,10 +2338,11 @@ function doGet(e) {
               <button
                 onClick={() => {
                   const csv = 'ID,Name,Father,Phone,Address,Occupation,Monthly Fee\n' +
-                    members.map(m => `${m.id},${m.name},${m.father || ''},${m.phone || ''},${m.address || ''},${m.occupation || ''},${m.monthlyFee || 0}`).join('\n');
-                  const blob = new Blob([csv], { type: 'text/csv' });
+                    members.map(m => [csvCell(m.id), csvCell(m.name), csvCell(m.father), csvCell(m.phone), csvCell(m.address), csvCell(m.occupation), csvCell(m.monthlyFee || 0)].join(',')).join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a'); a.href = url; a.download = 'members.csv'; a.click();
+                  URL.revokeObjectURL(url);
                 }}
                 style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#ccc', cursor: 'pointer' }}
               >
@@ -2309,11 +2350,12 @@ function doGet(e) {
               </button>
               <button
                 onClick={() => {
-                  const csv = 'ID,Date,Member,Amount,Source,Note\n' +
-                    collections.map(c => `${c.id},${c.date || ''},${c.memberName || ''},${c.amount || 0},${c.source || ''},${c.note || ''}`).join('\n');
-                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const csv = 'ID,Date,Member,Amount,Source,Note,Receipt No\n' +
+                    collections.map(c => [csvCell(c.id), csvCell(c.date), csvCell(c.memberName), csvCell(c.amount), csvCell(c.source), csvCell(c.note), csvCell(c.receiptNo)].join(',')).join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a'); a.href = url; a.download = 'collections.csv'; a.click();
+                  URL.revokeObjectURL(url);
                 }}
                 style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#ccc', cursor: 'pointer' }}
               >
@@ -2322,10 +2364,11 @@ function doGet(e) {
               <button
                 onClick={() => {
                   const csv = 'ID,Date,Category,Amount,Description\n' +
-                    expenditure.map(e => `${e.id},${e.date || ''},${e.category || ''},${e.amount || 0},${e.description || ''}`).join('\n');
-                  const blob = new Blob([csv], { type: 'text/csv' });
+                    expenditure.map(e => [csvCell(e.id), csvCell(e.date), csvCell(e.category), csvCell(e.amount), csvCell(e.description)].join(',')).join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a'); a.href = url; a.download = 'expenditure.csv'; a.click();
+                  URL.revokeObjectURL(url);
                 }}
                 style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#ccc', cursor: 'pointer' }}
               >
@@ -2534,6 +2577,9 @@ function Admin() {
     }
   }, [navigate]);
 
+  // CRITICAL: Synchronous auth check — must happen AFTER all hooks are declared
+  // but BEFORE any admin UI is rendered. Done below after all useEffect hooks.
+
   // Show PWA install banner after 30 seconds if installable
   useEffect(() => {
     if (canInstall && !isInstalled) {
@@ -2594,6 +2640,13 @@ function Admin() {
   };
 
   const activeTabLabel = tabs.find(tab => tab.id === activeTab)?.label || 'Dashboard';
+
+  // CRITICAL: Synchronous auth check — render null BEFORE the loading screen
+  // so unauthenticated users never see even a flash of admin UI. This runs
+  // after all hooks are declared (Rules of Hooks).
+  if (sessionStorage.getItem('svaks_admin') !== 'true') {
+    return null;
+  }
 
   // Show a full-screen loader while the initial cloud load is in flight.
   // This prevents the admin from rendering with empty arrays and showing
@@ -2779,7 +2832,7 @@ function Admin() {
             </button>
           </>
           <button onClick={handleLogout}>
-            <span>🔒</span> {t('admin.logout').replace('🔒 ', '')} →
+            <span>{t('admin.logoutIcon')}</span> {t('admin.logout')} →
           </button>
         </div>
       </aside>
