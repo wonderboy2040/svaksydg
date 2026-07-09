@@ -2777,7 +2777,6 @@ function Admin() {
                 type="button"
                 className={lang === 'en' ? 'active' : ''}
                 onClick={() => setLang('en')}
-                style={{ color: lang === 'en' ? 'white' : 'rgba(255,255,255,0.7)' }}
               >
                 EN
               </button>
@@ -2785,7 +2784,6 @@ function Admin() {
                 type="button"
                 className={lang === 'hi' ? 'active' : ''}
                 onClick={() => setLang('hi')}
-                style={{ color: lang === 'hi' ? 'white' : 'rgba(255,255,255,0.7)' }}
               >
                 हिं
               </button>
@@ -2796,14 +2794,15 @@ function Admin() {
               title={theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}
               aria-label="Toggle theme"
               style={{
-                background: 'rgba(212, 160, 23, 0.15)',
-                border: '1px solid rgba(212, 160, 23, 0.3)',
-                color: '#D4A017',
-                padding: '4px 10px',
-                borderRadius: '16px',
+                background: 'var(--clay-inset)',
+                border: '1px solid var(--border)',
+                color: 'var(--gold)',
+                padding: '5px 11px',
+                borderRadius: '999px',
                 cursor: 'pointer',
                 fontSize: '14px',
-                transition: 'all 0.2s'
+                transition: 'all 0.2s',
+                boxShadow: 'var(--clay-inset-sm)'
               }}
             >
               {theme === 'dark' ? '☀️' : '🌙'}
@@ -2811,22 +2810,22 @@ function Admin() {
           </div>
           {/* Cloud Sync Status Indicator */}
           <>
-            <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' || saving ? 'rgba(253,203,110,0.15)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.15)' : syncStatus === 'error' ? 'rgba(225,112,85,0.15)' : syncStatus === 'loading' ? 'rgba(108,92,231,0.15)' : syncStatus === 'offline' ? 'rgba(253,203,110,0.15)' : 'rgba(255,255,255,0.05)' }}>
+            <div style={{ marginBottom: '12px', padding: '8px 12px', borderRadius: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: syncStatus === 'syncing' || saving ? 'rgba(253,203,110,0.18)' : syncStatus === 'synced' ? 'rgba(0,184,148,0.18)' : syncStatus === 'error' ? 'rgba(225,112,85,0.18)' : syncStatus === 'loading' ? 'rgba(108,92,231,0.18)' : syncStatus === 'offline' ? 'rgba(253,203,110,0.18)' : 'var(--clay-inset)' }}>
               <span>{syncStatus === 'syncing' || saving ? '🔄' : syncStatus === 'synced' ? '✅' : syncStatus === 'error' ? '❌' : syncStatus === 'loading' ? '⏳' : syncStatus === 'offline' ? '📡' : '☁️'}</span>
-              <span style={{ color: syncStatus === 'syncing' || saving ? '#FDCB6E' : syncStatus === 'synced' ? '#00B894' : syncStatus === 'error' ? '#E17055' : syncStatus === 'loading' ? '#a29bfe' : syncStatus === 'offline' ? '#FDCB6E' : 'rgba(255,255,255,0.5)' }}>
+              <span style={{ color: syncStatus === 'syncing' || saving ? 'var(--warning)' : syncStatus === 'synced' ? 'var(--success)' : syncStatus === 'error' ? 'var(--danger)' : syncStatus === 'loading' ? '#a29bfe' : syncStatus === 'offline' ? 'var(--warning)' : 'var(--text-muted)', fontWeight: 600 }}>
                 {saving ? 'Saving to cloud...' : syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'synced' ? 'Cloud synced ✓' : syncStatus === 'error' ? 'Sync error' : syncStatus === 'loading' ? 'Loading from cloud...' : syncStatus === 'offline' ? 'Offline mode' : 'Cloud ready'}
               </span>
             </div>
             {/* Offline queue indicator */}
             {getPendingCount() > 0 && (
-              <div style={{ marginBottom: '12px', padding: '6px 10px', borderRadius: '6px', fontSize: '11px', background: 'rgba(253,203,110,0.15)', border: '1px solid rgba(253,203,110,0.4)', color: '#FDCB6E', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ marginBottom: '12px', padding: '7px 11px', borderRadius: '10px', fontSize: '11px', background: 'rgba(253,203,110,0.22)', border: '1px solid rgba(253,203,110,0.5)', color: '#8B6500', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
                 <span>⏳</span>
                 <span>{getPendingCount()} save(s) queued — will sync when online</span>
               </div>
             )}
             <button
               onClick={loadFromGoogleSheet}
-              style={{ marginBottom: '12px', padding: '6px 10px', fontSize: '11px', background: 'rgba(0,184,148,0.2)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '6px', color: '#00B894', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', width: '100%' }}
+              style={{ marginBottom: '12px', padding: '7px 11px', fontSize: '11px', background: 'rgba(0,184,148,0.18)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '10px', color: 'var(--success)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', width: '100%', fontWeight: 600 }}
             >
               {t('admin.refreshCloud')}
             </button>
@@ -2851,14 +2850,15 @@ function Admin() {
               value={globalSearch}
               onChange={e => handleGlobalSearch(e.target.value)}
               style={{
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '8px',
-                padding: '8px 12px',
-                color: 'white',
+                background: 'var(--clay-inset)',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '9px 14px',
+                color: 'var(--text)',
                 fontSize: '13px',
                 width: '160px',
-                outline: 'none'
+                outline: 'none',
+                boxShadow: 'var(--clay-inset-sm)'
               }}
             />
             {searchResults && (
@@ -2866,27 +2866,30 @@ function Admin() {
                 position: 'absolute',
                 top: '100%',
                 right: 0,
-                marginTop: '4px',
-                background: '#2D1810',
-                border: '1px solid rgba(212,160,23,0.3)',
-                borderRadius: '8px',
-                padding: '12px',
+                marginTop: '6px',
+                background: 'var(--clay-surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '14px',
+                padding: '14px',
                 minWidth: '250px',
                 maxHeight: '300px',
                 overflow: 'auto',
                 zIndex: 1000,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+                boxShadow: 'var(--clay-shadow-lg)'
               }}>
                 {searchResults.members.length === 0 && searchResults.collections.length === 0 && searchResults.expenditure.length === 0 ? (
-                  <div style={{ color: '#888', fontSize: '13px' }}>No results found</div>
+                  <div style={{ color: 'var(--text-soft)', fontSize: '13px' }}>No results found</div>
                 ) : (
                   <>
                     {searchResults.members.length > 0 && (
                       <div style={{ marginBottom: '12px' }}>
-                        <div style={{ color: '#D4A017', fontSize: '11px', fontWeight: '600', marginBottom: '6px' }}>👥 Members ({searchResults.members.length})</div>
+                        <div style={{ color: 'var(--maroon)', fontSize: '11px', fontWeight: 700, marginBottom: '6px' }}>👥 Members ({searchResults.members.length})</div>
                         {searchResults.members.map(m => (
-                          <div key={m.id} style={{ fontSize: '13px', color: '#ccc', padding: '4px 0', cursor: 'pointer' }}
-                            onClick={() => { setActiveTab('members'); setGlobalSearch(''); setSearchResults(null); }}>
+                          <div key={m.id} style={{ fontSize: '13px', color: 'var(--text)', padding: '5px 8px', borderRadius: '8px', cursor: 'pointer' }}
+                            onClick={() => { setActiveTab('members'); setGlobalSearch(''); setSearchResults(null); }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--clay-inset)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
                             {m.name} {m.phone && `(${m.phone})`}
                           </div>
                         ))}
@@ -2894,10 +2897,13 @@ function Admin() {
                     )}
                     {searchResults.collections.length > 0 && (
                       <div style={{ marginBottom: '12px' }}>
-                        <div style={{ color: '#D4A017', fontSize: '11px', fontWeight: '600', marginBottom: '6px' }}>💰 Collections ({searchResults.collections.length})</div>
+                        <div style={{ color: 'var(--maroon)', fontSize: '11px', fontWeight: 700, marginBottom: '6px' }}>💰 Collections ({searchResults.collections.length})</div>
                         {searchResults.collections.map(c => (
-                          <div key={c.id} style={{ fontSize: '13px', color: '#ccc', padding: '4px 0', cursor: 'pointer' }}
-                            onClick={() => { setActiveTab('collections'); setGlobalSearch(''); setSearchResults(null); }}>
+                          <div key={c.id} style={{ fontSize: '13px', color: 'var(--text)', padding: '5px 8px', borderRadius: '8px', cursor: 'pointer' }}
+                            onClick={() => { setActiveTab('collections'); setGlobalSearch(''); setSearchResults(null); }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--clay-inset)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
                             {c.memberName || 'Unknown'} - ₹{Number(c.amount || 0).toLocaleString('en-IN')}
                           </div>
                         ))}
@@ -2905,10 +2911,13 @@ function Admin() {
                     )}
                     {searchResults.expenditure.length > 0 && (
                       <div>
-                        <div style={{ color: '#D4A017', fontSize: '11px', fontWeight: '600', marginBottom: '6px' }}>📋 Expenses ({searchResults.expenditure.length})</div>
+                        <div style={{ color: 'var(--maroon)', fontSize: '11px', fontWeight: 700, marginBottom: '6px' }}>📋 Expenses ({searchResults.expenditure.length})</div>
                         {searchResults.expenditure.map(e => (
-                          <div key={e.id} style={{ fontSize: '13px', color: '#ccc', padding: '4px 0', cursor: 'pointer' }}
-                            onClick={() => { setActiveTab('expenditure'); setGlobalSearch(''); setSearchResults(null); }}>
+                          <div key={e.id} style={{ fontSize: '13px', color: 'var(--text)', padding: '5px 8px', borderRadius: '8px', cursor: 'pointer' }}
+                            onClick={() => { setActiveTab('expenditure'); setGlobalSearch(''); setSearchResults(null); }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--clay-inset)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
                             {e.category} - ₹{Number(e.amount || 0).toLocaleString('en-IN')}
                           </div>
                         ))}
@@ -2929,8 +2938,10 @@ function Admin() {
           textAlign: 'center',
           padding: '12px',
           fontSize: '11px',
-          color: 'rgba(255,255,255,0.3)',
-          borderTop: '1px solid rgba(255,255,255,0.05)'
+          color: 'var(--text-soft)',
+          borderTop: '1px solid var(--border-soft)',
+          fontWeight: 600,
+          letterSpacing: '0.5px'
         }}>
           SVAKS Admin v{APP_VERSION} | ॐ Sarve Bhavantu Sukhinah
         </div>

@@ -1,3 +1,7 @@
+/* ============================================
+   Toast notifications — Claymorphism
+   ============================================ */
+
 .toast-container {
   position: fixed;
   top: 20px;
@@ -7,23 +11,29 @@
   flex-direction: column;
   gap: 10px;
   pointer-events: none;
+  max-width: calc(100vw - 40px);
 }
 
 .toast {
   pointer-events: auto;
   min-width: 280px;
   max-width: 400px;
-  padding: 16px 20px;
-  border-radius: 12px;
+  padding: 14px 18px;
+  border-radius: 18px;
   color: white;
   font-family: 'Inter', sans-serif;
   font-size: 14px;
-  font-weight: 500;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  font-weight: 600;
+  box-shadow:
+    8px 8px 24px rgba(0, 0, 0, 0.25),
+    -4px -4px 12px rgba(255, 255, 255, 0.15),
+    inset 1px 1px 2px rgba(255, 255, 255, 0.25),
+    inset -1px -1px 2px rgba(0, 0, 0, 0.15);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  animation: slideIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+  gap: 12px;
+  animation: slideIn 0.4s var(--ease-clay) forwards;
   backdrop-filter: blur(10px);
 }
 
@@ -39,24 +49,42 @@
 
 .toast-content {
   flex: 1;
-  margin-right: 12px;
+  margin-right: 8px;
 }
 
 .toast-close {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   border: none;
   color: white;
-  width: 20px;
-  height: 20px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 14px;
   transition: background 0.2s;
+  flex-shrink: 0;
+  box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.15);
 }
 
 .toast-close:hover {
-  background: rgba(255,255,255,0.4);
+  background: rgba(255, 255, 255, 0.4);
+}
+
+@media (max-width: 480px) {
+  .toast-container {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+
+  .toast {
+    min-width: 0;
+    max-width: none;
+    padding: 12px 14px;
+    font-size: 13px;
+  }
 }

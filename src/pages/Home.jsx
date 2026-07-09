@@ -127,7 +127,7 @@ function Home() {
   };
 
   return (
-    <div style={{ background: 'var(--bg)' }}>
+    <div style={{ background: 'var(--clay-bg)' }}>
       {/* Offline Indicator */}
       {!isOnline && (
         <div style={{
