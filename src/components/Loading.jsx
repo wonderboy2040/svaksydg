@@ -7,13 +7,15 @@ function Loading({ fullScreen = false, message = 'Loading...' }) {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'linear-gradient(180deg, #1a0a00 0%, #2D1810 100%)'
+    background: 'var(--clay-bg)',
+    color: 'var(--text)'
   } : {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '40px'
+    padding: '40px',
+    color: 'var(--text)'
   };
 
   return (
@@ -21,16 +23,18 @@ function Loading({ fullScreen = false, message = 'Loading...' }) {
       <div style={{
         fontSize: '48px',
         marginBottom: '16px',
-        animation: 'pulse 1.5s ease-in-out infinite'
+        color: 'var(--gold)',
+        animation: 'pulse 1.5s ease-in-out infinite',
+        fontFamily: "'Tiro Devanagari Hindi', serif"
       }}>ॐ</div>
       <div style={{
-        color: '#D4A017',
+        color: 'var(--maroon)',
         fontSize: '18px',
         fontFamily: 'Inter, sans-serif',
-        fontWeight: '600'
+        fontWeight: 700
       }}>{message}</div>
       <div style={{
-        color: '#888',
+        color: 'var(--text-muted)',
         fontSize: '14px',
         fontFamily: 'Inter, sans-serif',
         marginTop: '8px'

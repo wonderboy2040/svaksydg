@@ -134,7 +134,13 @@ self.addEventListener('sync', (event) => {
 
 // Push notifications (future use)
 self.addEventListener('push', (event) => {
-  const data = event.data ? event.data.json() : {};
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    console.warn('[SVAKS SW] Push payload was not valid JSON, falling back to empty', e);
+    data = {};
+  }
   const title = data.title || 'SVAKS Notification';
   const options = {
     body: data.body || '',

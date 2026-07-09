@@ -49,7 +49,7 @@ function AdminLogin() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(180deg, #1a0a00 0%, #2D1810 100%)',
+      background: 'var(--clay-bg)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',

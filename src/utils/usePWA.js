@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 // ===========================================
 // SVAKS PWA Install Hook
@@ -79,6 +79,10 @@ export function usePWAInstall() {
 export function useServiceWorker() {
   const [status, setStatus] = useState('unregistered'); // 'unregistered' | 'registering' | 'registered' | 'error'
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  // Track the registration + cleanup function in refs so the cleanup
+  // reliably targets the SAME registration even if SW updates between
+  // attach and unmount (prevents setInterval/listener leaks).
+  const cleanupRef = useRef(null);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) {
@@ -92,16 +96,21 @@ export function useServiceWorker() {
       return;
     }
 
+    let cancelled = false;
+
     // Get the existing registration (registered by main.jsx on window load)
     navigator.serviceWorker.getRegistration('/').then((registration) => {
+      if (cancelled) return;
+
       if (!registration) {
         // SW not yet registered — main.jsx will register on load; poll briefly
         setStatus('registering');
         const retryTimer = setTimeout(() => {
+          if (cancelled) return;
           navigator.serviceWorker.getRegistration('/').then((reg) => {
             if (reg) {
               setStatus('registered');
-              attachListeners(reg);
+              cleanupRef.current = attachListeners(reg);
             } else {
               setStatus('error');
             }
@@ -110,7 +119,7 @@ export function useServiceWorker() {
         return () => clearTimeout(retryTimer);
       }
       setStatus('registered');
-      attachListeners(registration);
+      cleanupRef.current = attachListeners(registration);
     }).catch((error) => {
       console.error('[SVAKS SW] getRegistration failed:', error);
       setStatus('error');
@@ -143,8 +152,8 @@ export function useServiceWorker() {
       };
       navigator.serviceWorker.addEventListener('message', handleMessage);
 
-      // Cleanup function stored on the registration object for re-use
-      registration._svaksCleanup = () => {
+      // Return a cleanup function that closes over the SAME handlers
+      return () => {
         registration.removeEventListener('updatefound', handleUpdateFound);
         clearInterval(updateInterval);
         navigator.serviceWorker.removeEventListener('message', handleMessage);
@@ -152,13 +161,11 @@ export function useServiceWorker() {
     }
 
     return () => {
-      // Best-effort cleanup — get the registration and call its cleanup if attached
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistration('/').then((reg) => {
-          if (reg && typeof reg._svaksCleanup === 'function') {
-            reg._svaksCleanup();
-          }
-        }).catch(() => {});
+      cancelled = true;
+      // Call the captured cleanup — guaranteed to match the registration we attached to
+      if (cleanupRef.current) {
+        cleanupRef.current();
+        cleanupRef.current = null;
       }
     };
   }, []);

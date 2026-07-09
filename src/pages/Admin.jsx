@@ -262,7 +262,7 @@ function DashboardSection() {
           </div>
         </div>
         {members.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#999', padding: '20px' }}>No members yet. Add members first!</p>
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>No members yet. Add members first!</p>
         ) : (
           <div className="table-wrap">
             <table>
@@ -297,6 +297,7 @@ function DashboardSection() {
                           <button
                             className="btn-whatsapp"
                             onClick={() => handleWhatsAppReminder(m)}
+                            aria-label={`Send WhatsApp reminder to ${m.name}`}
                             title="Send WhatsApp reminder"
                           >
                             💬
@@ -304,13 +305,14 @@ function DashboardSection() {
                           <button
                             className="btn-sms"
                             onClick={() => handleSmsReminder(m)}
+                            aria-label={`Send SMS reminder to ${m.name}`}
                             title="Send SMS reminder"
                           >
                             📱
                           </button>
                         </div>
                       ) : (
-                        <span style={{ color: '#aaa', fontSize: '11px' }}>{m.paid ? '✓ Paid' : 'No phone'}</span>
+                        <span style={{ color: 'var(--text-soft)', fontSize: '11px' }}>{m.paid ? '✓ Paid' : 'No phone'}</span>
                       )}
                     </td>
                   </tr>
@@ -329,7 +331,7 @@ function DashboardSection() {
             <span className="badge badge-success">{recentCollections.length} entries</span>
           </div>
           {recentCollections.length === 0 ? (
-            <p style={{ textAlign: 'center', color: '#999' }}>No collections yet.</p>
+            <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No collections yet.</p>
           ) : (
             <div className="table-wrap">
               <table>
@@ -347,6 +349,7 @@ function DashboardSection() {
                         <button
                           className="btn-receipt"
                           onClick={() => handlePrintReceipt(c)}
+                          aria-label={`Print receipt for ${c.memberName || 'collection'}`}
                           title="Print receipt"
                         >
                           {t('admin.printReceipt')}
@@ -366,7 +369,7 @@ function DashboardSection() {
             <span className="badge badge-maroon">{recentExpenditure.length} entries</span>
           </div>
           {recentExpenditure.length === 0 ? (
-            <p style={{ textAlign: 'center', color: '#999' }}>No expenses recorded.</p>
+            <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No expenses recorded.</p>
           ) : (
             <div className="table-wrap">
               <table>
@@ -473,7 +476,7 @@ function MembersSection() {
           </div>
         </div>
         {filtered.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
             {members.length === 0 ? 'No members yet. Add your first member!' : 'No search results found.'}
           </p>
         ) : (
@@ -619,14 +622,12 @@ function CollectionsSection() {
 
   const selectMember = (memberId) => {
     const member = members.find(m => m.id === memberId);
-    setForm({
+    setForm(prev => ({
+      ...prev,                          // preserve note/date/source the user already set
       memberId,
       memberName: member ? member.name : '',
-      amount: member?.monthlyFee || form.amount,
-      source: 'Monthly Collection',
-      note: '',
-      date: new Date().toISOString().split('T')[0]
-    });
+      amount: member?.monthlyFee || prev.amount
+    }));
   };
 
   return (
@@ -652,7 +653,7 @@ function CollectionsSection() {
         </div>
 
         {filtered.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>No collections this month.</p>
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>No collections this month.</p>
         ) : (
           <div className="table-wrap">
             <table>
@@ -672,6 +673,7 @@ function CollectionsSection() {
                       <button
                         className="btn-receipt"
                         onClick={() => handlePrintReceipt(c)}
+                        aria-label={`Print receipt for ${c.memberName || 'collection'}`}
                         title="Print receipt"
                       >
                         🧾
@@ -813,6 +815,19 @@ function MonthlyFixedCollectionSection() {
       return;
     }
 
+    // Check for duplicate receipt number across existing collections
+    const existing = collections.find(c => c.receiptNo && c.receiptNo.toLowerCase() === receiptNo.toLowerCase());
+    if (existing) {
+      addToast(`Receipt #${receiptNo} already used by ${existing.memberName || 'another entry'}!`, 'danger');
+      return;
+    }
+
+    // CRITICAL: Use day 1 of the filter month — using today's day-of-month
+    // would overflow on short months (e.g., day 31 in April → May 1st).
+    const today = new Date();
+    const dayOfMonth = Math.min(today.getDate(), 28); // safe for all months
+    const collectionDate = new Date(filterYear, filterMonth, dayOfMonth).toISOString().split('T')[0];
+
     const newCollection = {
       id: Date.now() + Math.floor(Math.random() * 1000),
       memberId: member.id,
@@ -821,7 +836,7 @@ function MonthlyFixedCollectionSection() {
       source: 'Monthly Collection',
       note: `Fixed monthly collection - ${MONTHS[filterMonth]} ${filterYear}`,
       receiptNo,
-      date: new Date(filterYear, filterMonth, new Date().getDate()).toISOString().split('T')[0]
+      date: collectionDate
     };
 
     const success = await bulkAddCollections([newCollection]);
@@ -859,9 +874,12 @@ function MonthlyFixedCollectionSection() {
     }
   };
 
-  // Quick fill: auto-generate receipt number
+  // Quick fill: auto-generate receipt number using full memberId + random suffix
+  // to guarantee uniqueness across members (previous 3-char slice collided)
   const handleAutoReceipt = (memberId) => {
-    const auto = `R${filterYear}${String(filterMonth + 1).padStart(2, '0')}${String(memberId).slice(-3)}`;
+    const ym = `${filterYear}${String(filterMonth + 1).padStart(2, '0')}`;
+    const rand = Math.floor(Math.random() * 9000) + 1000; // 4-digit random suffix
+    const auto = `R${ym}-${memberId}-${rand}`;
     setReceiptInputs(prev => ({ ...prev, [memberId]: auto }));
   };
 
@@ -905,12 +923,12 @@ function MonthlyFixedCollectionSection() {
         {/* Progress bar */}
         <div style={{ marginBottom: '16px', padding: '10px 14px', background: 'rgba(212,160,23,0.08)', borderRadius: '8px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '12px' }}>
-            <span style={{ color: '#888' }}>Collection Progress</span>
+            <span style={{ color: 'var(--text-muted)' }}>Collection Progress</span>
             <span style={{ fontWeight: '600', color: '#800000' }}>
               {Math.round((paidCount / Math.max(members.length, 1)) * 100)}%
             </span>
           </div>
-          <div style={{ height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+          <div style={{ height: '8px', background: 'var(--clay-inset)', borderRadius: '4px', overflow: 'hidden' }}>
             <div style={{
               height: '100%',
               width: `${(paidCount / Math.max(members.length, 1)) * 100}%`,
@@ -922,11 +940,11 @@ function MonthlyFixedCollectionSection() {
         </div>
 
         {members.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
             No members yet. Add members first from the Members tab!
           </p>
         ) : filtered.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
             No members match your search.
           </p>
         ) : (
@@ -950,7 +968,7 @@ function MonthlyFixedCollectionSection() {
                     <td>{i + 1}</td>
                     <td>
                       <strong>{m.name}</strong>
-                      {m.father && <div style={{ fontSize: '11px', color: '#888' }}>{m.father}</div>}
+                      {m.father && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{m.father}</div>}
                     </td>
                     <td>{m.father || '-'}</td>
                     <td>{m.phone || '-'}</td>
@@ -967,14 +985,14 @@ function MonthlyFixedCollectionSection() {
                         : <span className="badge badge-danger">✗ Pending</span>
                       }
                       {m.paid && m.receiptNo && (
-                        <div style={{ fontSize: '10px', color: '#888', marginTop: '2px' }}>
+                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
                           Receipt: {m.receiptNo}
                         </div>
                       )}
                     </td>
                     <td>
                       {m.paid ? (
-                        <span style={{ fontSize: '12px', color: '#888' }}>{m.receiptNo || '—'}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{m.receiptNo || '—'}</span>
                       ) : (
                         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                           <input
@@ -988,7 +1006,7 @@ function MonthlyFixedCollectionSection() {
                               width: '110px',
                               borderRadius: '4px',
                               border: '1px solid var(--border)',
-                              background: 'rgba(255,255,255,0.05)'
+                              background: 'var(--clay-inset)'
                             }}
                             onKeyDown={e => {
                               if (e.key === 'Enter' && (receiptInputs[m.id] || '').trim()) {
@@ -998,6 +1016,7 @@ function MonthlyFixedCollectionSection() {
                           />
                           <button
                             onClick={() => handleAutoReceipt(m.id)}
+                            aria-label="Auto-generate receipt number"
                             title="Auto-generate receipt number"
                             style={{
                               padding: '4px 6px',
@@ -1039,7 +1058,7 @@ function MonthlyFixedCollectionSection() {
                           className="btn-action"
                           style={{
                             background: 'linear-gradient(135deg, #00B894, #00cec9)',
-                            color: 'white',
+                            color: 'var(--text)',
                             border: 'none',
                             padding: '5px 14px',
                             borderRadius: '6px',
@@ -1062,7 +1081,7 @@ function MonthlyFixedCollectionSection() {
         )}
 
         {/* Footer summary */}
-        <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', fontSize: '12px', color: '#888' }}>
+        <div style={{ marginTop: '16px', padding: '12px', background: 'var(--clay-inset)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
           <strong>📋 How it works:</strong> Each permanent member pays ₹{FIXED_AMOUNT}/month. Enter the receipt number,
           click "✓ Mark Paid" — done! Use 🎲 to auto-generate a receipt number.
           To remove a payment (wrong entry), click "✗ Unpaid" — but the row in Google Sheets must be deleted manually.
@@ -1141,7 +1160,7 @@ function ExpenditureSection() {
           </div>
         </div>
         {expenditure.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>No expenses recorded yet.</p>
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>No expenses recorded yet.</p>
         ) : (
           <div className="table-wrap">
             <table>
@@ -1306,7 +1325,7 @@ function GallerySection() {
         </div>
 
         {safeGallery.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
             <span style={{ fontSize: '48px' }}>📸</span>
             <p>No albums yet. Create your first album!</p>
           </div>
@@ -1314,37 +1333,38 @@ function GallerySection() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px', padding: '16px' }}>
             {safeGallery.map(album => (
               <div key={album.id} style={{
-                background: 'linear-gradient(135deg, #2D1810, #1a0a00)',
-                borderRadius: '12px',
+                background: 'var(--clay-surface)',
+                borderRadius: '20px',
                 overflow: 'hidden',
-                border: '1px solid rgba(212,160,23,0.2)'
+                border: '1px solid var(--border-soft)',
+                boxShadow: 'var(--clay-shadow-sm)'
               }}>
                 {/* Cover Image */}
-                <div style={{ height: '140px', background: album.cover ? `url(${getDirectImageUrl(album.cover)}) center/cover` : 'linear-gradient(135deg, #800000, #a00000)', position: 'relative' }}>
+                <div style={{ height: '140px', background: album.cover ? `url(${getDirectImageUrl(album.cover)}) center/cover` : 'linear-gradient(135deg, var(--maroon), var(--deep-maroon))', position: 'relative' }}>
                   {!album.cover && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: '40px', color: '#D4A017' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: '40px', color: 'var(--gold)' }}>
                       📸
                     </div>
                   )}
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.8))', padding: '8px' }}>
-                    <span style={{ fontSize: '12px', color: '#D4A017' }}>{album.photos?.length || 0} photos</span>
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(26, 10, 0, 0.8))', padding: '8px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--gold)', fontWeight: 600 }}>{album.photos?.length || 0} photos</span>
                   </div>
                 </div>
 
                 {/* Album Info */}
                 <div style={{ padding: '12px' }}>
-                  <h4 style={{ color: '#fff', fontSize: '14px', marginBottom: '4px', fontWeight: '600' }}>{album.title}</h4>
-                  <p style={{ color: '#888', fontSize: '12px', marginBottom: '8px' }}>{album.date}</p>
+                  <h4 style={{ color: 'var(--text)', fontSize: '14px', marginBottom: '4px', fontWeight: 700 }}>{album.title}</h4>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '8px' }}>{album.date}</p>
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    <button onClick={() => setSelectedAlbum(album)} style={{ flex: 1, padding: '6px', background: 'rgba(212,160,23,0.2)', border: '1px solid rgba(212,160,23,0.4)', borderRadius: '6px', color: '#D4A017', fontSize: '12px', cursor: 'pointer' }}>
+                    <button onClick={() => setSelectedAlbum(album)} style={{ flex: 1, padding: '6px', background: 'rgba(212,160,23,0.2)', border: '1px solid rgba(212,160,23,0.4)', borderRadius: '6px', color: 'var(--gold)', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
                       👁️ View
                     </button>
-                    <button onClick={() => openPhotoAdd(album)} style={{ flex: 1, padding: '6px', background: 'rgba(0,184,148,0.2)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '6px', color: '#00B894', fontSize: '12px', cursor: 'pointer' }}>
+                    <button onClick={() => openPhotoAdd(album)} style={{ flex: 1, padding: '6px', background: 'rgba(0,184,148,0.2)', border: '1px solid rgba(0,184,148,0.4)', borderRadius: '6px', color: 'var(--success)', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
                       ➕ Photo
                     </button>
                   </div>
                   <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                    <button onClick={() => openEdit(album)} style={{ flex: 1, padding: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#ccc', fontSize: '11px', cursor: 'pointer' }}>
+                    <button onClick={() => openEdit(album)} style={{ flex: 1, padding: '6px', background: 'var(--clay-inset)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>
                       ✏️ Edit
                     </button>
                   </div>
@@ -1359,34 +1379,38 @@ function GallerySection() {
       {selectedAlbum && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.9)', zIndex: 99999,
+          background: 'rgba(26, 10, 0, 0.7)',
+          backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)',
+          zIndex: 99999,
           display: 'flex', flexDirection: 'column'
         }}>
-          <div style={{ padding: '16px', background: '#2D1810', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ padding: '16px', background: 'var(--clay-surface)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-soft)' }}>
             <div>
-              <h3 style={{ color: '#D4A017', marginBottom: '4px' }}>{selectedAlbum.title}</h3>
-              <span style={{ color: '#888', fontSize: '13px' }}>{selectedAlbum.date} | {selectedAlbum.photos?.length || 0} photos</span>
+              <h3 style={{ color: 'var(--maroon)', marginBottom: '4px', fontFamily: "'Playfair Display', serif", fontWeight: 800 }}>{selectedAlbum.title}</h3>
+              <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{selectedAlbum.date} | {selectedAlbum.photos?.length || 0} photos</span>
             </div>
-            <button onClick={() => setSelectedAlbum(null)} style={{ padding: '8px 16px', background: '#800000', border: 'none', borderRadius: '8px', color: 'white', cursor: 'pointer' }}>
+            <button onClick={() => setSelectedAlbum(null)} style={{ padding: '8px 16px', background: 'var(--danger)', border: 'none', borderRadius: '10px', color: 'var(--text)', cursor: 'pointer', fontWeight: 600 }}>
               ✕ Close
             </button>
           </div>
-          <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+          <div style={{ flex: 1, overflow: 'auto', padding: '16px', background: 'var(--clay-bg)' }}>
             {selectedAlbum.photos?.length === 0 ? (
-              <div style={{ textAlign: 'center', color: '#888', padding: '40px' }}>
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px' }}>
                 <span style={{ fontSize: '48px' }}>📷</span>
                 <p>No photos in this album yet.</p>
-                <button onClick={() => openPhotoAdd(selectedAlbum)} style={{ marginTop: '16px', padding: '12px 24px', background: '#D4A017', border: 'none', borderRadius: '8px', color: '#000', cursor: 'pointer', fontWeight: '600' }}>
+                <button onClick={() => openPhotoAdd(selectedAlbum)} style={{ marginTop: '16px', padding: '12px 24px', background: 'linear-gradient(135deg, var(--saffron), var(--gold))', border: 'none', borderRadius: '12px', color: 'var(--text)', cursor: 'pointer', fontWeight: 700, boxShadow: 'var(--clay-shadow-sm)' }}>
                   Add Photos
                 </button>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
                 {selectedAlbum.photos?.map(photo => (
-                  <div key={photo.id} style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden' }}>
+                  <div key={photo.id} style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', boxShadow: 'var(--clay-shadow-sm)' }}>
                     <img
                       src={getDirectImageUrl(photo.url)}
                       alt=""
+                      loading="lazy"
                       style={{ width: '100%', height: '180px', objectFit: 'cover' }}
                       onError={(e) => { e.target.src = PLACEHOLDER_IMAGE; }}
                     />
@@ -1395,8 +1419,8 @@ function GallerySection() {
               </div>
             )}
           </div>
-          <div style={{ padding: '16px', background: '#2D1810', textAlign: 'center' }}>
-            <button onClick={() => openPhotoAdd(selectedAlbum)} style={{ padding: '12px 24px', background: 'linear-gradient(135deg, #D4A017, #FF9933)', border: 'none', borderRadius: '8px', color: '#000', cursor: 'pointer', fontWeight: '600', fontSize: '14px' }}>
+          <div style={{ padding: '16px', background: 'var(--clay-surface)', textAlign: 'center', borderTop: '1px solid var(--border-soft)' }}>
+            <button onClick={() => openPhotoAdd(selectedAlbum)} style={{ padding: '12px 24px', background: 'linear-gradient(135deg, var(--saffron), var(--gold))', border: 'none', borderRadius: '12px', color: 'var(--text)', cursor: 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: 'var(--clay-shadow-sm)' }}>
               + Add More Photos
             </button>
           </div>
@@ -1429,7 +1453,7 @@ function GallerySection() {
               onChange={e => setForm(prev => ({ ...prev, cover: e.target.value }))}
               placeholder="https://drive.google.com/..."
             />
-            <small style={{ color: '#888', fontSize: '11px' }}>Paste Google Drive photo URL for album cover</small>
+            <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>Paste Google Drive photo URL for album cover</small>
           </div>
           <div className="modal-actions">
             <button className="btn-secondary" onClick={() => { setShowModal(false); setEditAlbum(null); }}>Cancel</button>
@@ -1443,7 +1467,7 @@ function GallerySection() {
       {/* Add Photo Modal */}
       <Modal isOpen={showPhotoModal} onClose={() => { setShowPhotoModal(false); setNewPhotoUrl(''); setUrlStatus(null); }} title="Add Photo to Album">
         <div className="modal-form">
-          <p style={{ color: '#888', fontSize: '13px', marginBottom: '16px' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '16px' }}>
             Paste a Google Drive or Google Photos URL. You can add multiple photos one by one.
           </p>
           <div className="form-group">
@@ -1465,7 +1489,7 @@ function GallerySection() {
                 {urlStatus.message}
               </small>
             )}
-            <small style={{ color: '#666', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+            <small style={{ color: 'var(--text)', fontSize: '11px', marginTop: '4px', display: 'block' }}>
               💡 Tip: For Google Drive, right-click image → Get link → set "Anyone with link". For Google Photos, use sharing link.
             </small>
           </div>
@@ -1607,7 +1631,7 @@ function ReportsSection() {
           Member Payment Status
         </h4>
         {members.length === 0 ? (
-          <p style={{ color: '#999' }}>Add members for reports.</p>
+          <p style={{ color: 'var(--text-muted)' }}>Add members for reports.</p>
         ) : (
           <div className="table-wrap" style={{ marginBottom: '24px' }}>
             <table>
@@ -1748,9 +1772,9 @@ function AnnualStatementSection() {
           </select>
         </div>
 
-        <div style={{ padding: '20px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', marginBottom: '20px' }}>
+        <div style={{ padding: '20px', background: 'var(--clay-inset)', borderRadius: '12px', marginBottom: '20px' }}>
           <h4 style={{ color: 'var(--gold)', marginBottom: '12px' }}>📄 Generate Single Member Statement</h4>
-          <p style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
             Select a member and click "Generate PDF". Opens in a new window — print or save as PDF.
             Includes month-wise breakdown, totals, pending dues, and signature section.
           </p>
@@ -1780,7 +1804,7 @@ function AnnualStatementSection() {
 
         <div style={{ padding: '20px', background: 'rgba(108,92,231,0.08)', borderRadius: '12px', border: '1px solid rgba(108,92,231,0.2)', marginBottom: '20px' }}>
           <h4 style={{ color: '#a29bfe', marginBottom: '12px' }}>📦 Bulk Generate — All Members</h4>
-          <p style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
             Generates annual statements for all {members.length} members one by one.
             <strong style={{ color: '#FDCB6E' }}> ⚠️ Allow popups</strong> for this site, otherwise only the first statement will open.
             Each statement opens with a 1.5 second delay to avoid popup blocking.
@@ -1790,7 +1814,7 @@ function AnnualStatementSection() {
             style={{
               padding: '12px 24px',
               background: 'linear-gradient(135deg, #6c5ce7, #5a4bd1)',
-              color: 'white',
+              color: 'var(--text)',
               border: 'none',
               borderRadius: '10px',
               fontSize: '14px',
@@ -1805,7 +1829,7 @@ function AnnualStatementSection() {
 
         <div style={{ padding: '16px', background: 'rgba(0,184,148,0.08)', borderRadius: '12px', border: '1px solid rgba(0,184,148,0.2)' }}>
           <h4 style={{ color: '#00B894', marginBottom: '8px' }}>💡 What's in the statement?</h4>
-          <ul style={{ fontSize: '13px', color: '#888', paddingLeft: '20px', lineHeight: '1.8' }}>
+          <ul style={{ fontSize: '13px', color: 'var(--text-muted)', paddingLeft: '20px', lineHeight: '1.8' }}>
             <li>Member details (name, father, phone, address, monthly fee)</li>
             <li>Summary cards: Total paid, Months paid, Pending dues, Donations</li>
             <li>Month-wise payment table with dates, amounts, receipt numbers</li>
@@ -1886,20 +1910,19 @@ function CommitteeSection() {
             </button>
           </div>
         </div>
-        <p style={{ fontSize: '13px', color: '#888', padding: '0 16px', marginBottom: '8px' }}>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '0 16px', marginBottom: '8px' }}>
           Edit fields below, then click "💾 Save Committee to Cloud" to push changes. Use Google Drive or Google Photos links for photos.
         </p>
         
         {committee.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', background: '#f8f9fa', borderRadius: '12px', border: '1px dashed #ccc', margin: '20px' }}>
             <span style={{ fontSize: '40px', display: 'block', marginBottom: '10px' }}>🏛️</span>
-            <p style={{ color: '#666', margin: 0 }}>No committee members found.</p>
-            <p style={{ color: '#999', fontSize: '14px', marginTop: '4px' }}>Click "➕ Add Committee Member" to build your team.</p>
+            <p style={{ color: 'var(--text)', margin: 0 }}>No committee members found.</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '4px' }}>Click "➕ Add Committee Member" to build your team.</p>
           </div>
         ) : (
           <div className="committee-edit-grid">
             {committee.map(member => {
-              const imgError = false;
               const photoValidation = member.photo ? validateImageUrl(member.photo) : null;
               return (
                 <div className="committee-edit-card" key={member.id} style={{ position: 'relative' }}>
@@ -1941,7 +1964,7 @@ function CommitteeSection() {
                         }}
                       />
                     ) : null}
-                    <div className="avatar-placeholder" style={member.photo && !imgError ? { display: 'none' } : {}}>
+                    <div className="avatar-placeholder" style={member.photo ? { display: 'none' } : {}}>
                       {getInitials(member.name || member.position)}
                     </div>
                   </div>
@@ -2001,7 +2024,7 @@ function CommitteeSection() {
           </div>
         )}
         {/* Bottom Save Button */}
-        <div style={{ padding: '16px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <div style={{ padding: '16px', textAlign: 'center', borderTop: '1px solid var(--border-soft)' }}>
           <button className="btn-primary" onClick={handleSaveCommittee} disabled={saving} style={{ padding: '12px 32px', fontSize: '15px' }}>
             {saving ? '🔄 Saving to Cloud...' : '💾 Save All Committee Changes to Cloud'}
           </button>
@@ -2233,7 +2256,7 @@ function doGet(e) {
       <div className="admin-card">
         <div className="settings-section">
           <h4>Google Sheets Setup</h4>
-          <p style={{ color: '#666', fontSize: '14px', marginBottom: '12px', lineHeight: '1.6' }}>
+          <p style={{ color: 'var(--text)', fontSize: '14px', marginBottom: '12px', lineHeight: '1.6' }}>
             <strong>Step-by-step:</strong>
           </p>
           <ol style={{ paddingLeft: '20px', color: '#555', fontSize: '14px', lineHeight: '2' }}>
@@ -2270,21 +2293,21 @@ function doGet(e) {
                 <span style={{ fontSize: '20px' }}>☁️</span>
                 <div>
                   <div style={{ fontSize: '14px', fontWeight: '600', color: '#00B894' }}>Multi-Device Auto-Sync Active</div>
-                  <div style={{ fontSize: '12px', color: '#888' }}>Data automatically syncs across all devices</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Data automatically syncs across all devices</div>
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', fontSize: '12px' }}>
-                <div style={{ padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-                  <div style={{ color: '#888' }}>🔄 Auto-poll</div>
-                  <div style={{ color: '#fff' }}>Every 30 seconds</div>
+                <div style={{ padding: '8px', background: 'var(--clay-inset)', borderRadius: '8px' }}>
+                  <div style={{ color: 'var(--text-muted)' }}>🔄 Auto-poll</div>
+                  <div style={{ color: 'var(--text)' }}>Every 30 seconds</div>
                 </div>
-                <div style={{ padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-                  <div style={{ color: '#888' }}>👁️ Tab switch</div>
-                  <div style={{ color: '#fff' }}>Instant sync</div>
+                <div style={{ padding: '8px', background: 'var(--clay-inset)', borderRadius: '8px' }}>
+                  <div style={{ color: 'var(--text-muted)' }}>👁️ Tab switch</div>
+                  <div style={{ color: 'var(--text)' }}>Instant sync</div>
                 </div>
-                <div style={{ padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-                  <div style={{ color: '#888' }}>📊 Last sync</div>
-                  <div style={{ color: '#fff' }}>{syncLastTime ? new Date(syncLastTime).toLocaleTimeString() : 'Never'}</div>
+                <div style={{ padding: '8px', background: 'var(--clay-inset)', borderRadius: '8px' }}>
+                  <div style={{ color: 'var(--text-muted)' }}>📊 Last sync</div>
+                  <div style={{ color: 'var(--text)' }}>{syncLastTime ? new Date(syncLastTime).toLocaleTimeString() : 'Never'}</div>
                 </div>
               </div>
               {/* Sync Status Display */}
@@ -2301,7 +2324,7 @@ function doGet(e) {
                   </span>
                 </div>
                 {syncError && <div style={{ marginTop: '6px', fontSize: '12px', color: '#E17055' }}>Error: {syncError}</div>}
-                <div style={{ marginTop: '8px', fontSize: '11px', color: '#888', lineHeight: '1.5' }}>
+                <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
                   ℹ️ Data is saved directly to Google Sheets. To delete data, go to Google Sheets directly and delete rows manually.
                 </div>
               </div>
@@ -2314,7 +2337,7 @@ function doGet(e) {
       <div className="admin-card">
         <div className="settings-section">
           <h4>Data Backup & Restore</h4>
-          <p style={{ color: '#666', fontSize: '14px', marginBottom: '16px' }}>
+          <p style={{ color: 'var(--text)', fontSize: '14px', marginBottom: '16px' }}>
             Keep a backup of your data and restore when needed.
           </p>
           <div className="settings-actions">
@@ -2332,8 +2355,8 @@ function doGet(e) {
             </label>
           </div>
           {/* Quick Exports */}
-          <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
-            <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>Quick Export (CSV for Excel)</div>
+          <div style={{ marginTop: '16px', padding: '12px', background: 'var(--clay-inset)', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>Quick Export (CSV for Excel)</div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => {
@@ -2344,7 +2367,7 @@ function doGet(e) {
                   const a = document.createElement('a'); a.href = url; a.download = 'members.csv'; a.click();
                   URL.revokeObjectURL(url);
                 }}
-                style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#ccc', cursor: 'pointer' }}
+                style={{ padding: '6px 12px', fontSize: '12px', background: 'var(--clay-inset)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-soft)', cursor: 'pointer' }}
               >
                 👥 Members CSV
               </button>
@@ -2357,7 +2380,7 @@ function doGet(e) {
                   const a = document.createElement('a'); a.href = url; a.download = 'collections.csv'; a.click();
                   URL.revokeObjectURL(url);
                 }}
-                style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#ccc', cursor: 'pointer' }}
+                style={{ padding: '6px 12px', fontSize: '12px', background: 'var(--clay-inset)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-soft)', cursor: 'pointer' }}
               >
                 💰 Collections CSV
               </button>
@@ -2370,7 +2393,7 @@ function doGet(e) {
                   const a = document.createElement('a'); a.href = url; a.download = 'expenditure.csv'; a.click();
                   URL.revokeObjectURL(url);
                 }}
-                style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', color: '#ccc', cursor: 'pointer' }}
+                style={{ padding: '6px 12px', fontSize: '12px', background: 'var(--clay-inset)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-soft)', cursor: 'pointer' }}
               >
                 📋 Expenses CSV
               </button>
@@ -2441,8 +2464,8 @@ function NotificationsSection() {
         {activeNotifs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', background: '#f8f9fa', borderRadius: '12px', border: '1px dashed #ccc' }}>
             <span style={{ fontSize: '40px', display: 'block', marginBottom: '10px' }}>📢</span>
-            <p style={{ color: '#666', margin: 0 }}>No active notices on the website.</p>
-            <p style={{ color: '#999', fontSize: '14px', marginTop: '4px' }}>Click "+ Add Notice" to announce something.</p>
+            <p style={{ color: 'var(--text)', margin: 0 }}>No active notices on the website.</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '4px' }}>Click "+ Add Notice" to announce something.</p>
           </div>
         ) : (
           <div className="notifications-list">
@@ -2453,12 +2476,12 @@ function NotificationsSection() {
                   <div className="notification-content-admin">
                     <span className="notification-badge">{notif.title}</span>
                     <p style={{ fontSize: '16px', fontWeight: '500' }}>{notif.text}</p>
-                    <span className="notification-date-admin" style={{ color: '#888' }}>📅 {notif.date}</span>
+                    <span className="notification-date-admin" style={{ color: 'var(--text-muted)' }}>📅 {notif.date}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '100px' }}>
                   <button onClick={() => handleToggle(notif)} className="btn-action" style={{ background: '#f1f2f6', color: '#57606f', border: '1px solid #dfe4ea', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>👁️ Hide</button>
-                  <button onClick={() => handleEdit(notif)} className="btn-action" style={{ background: 'var(--gold)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>✏️ Edit</button>
+                  <button onClick={() => handleEdit(notif)} className="btn-action" style={{ background: 'var(--gold)', color: 'var(--text)', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>✏️ Edit</button>
                 </div>
               </div>
             ))}
@@ -2479,11 +2502,11 @@ function NotificationsSection() {
                   <div className="notification-content-admin">
                     <span className="notification-badge" style={{ background: 'linear-gradient(135deg, #666, #888)' }}>{notif.title}</span>
                     <p style={{ fontSize: '16px', fontWeight: '500' }}>{notif.text}</p>
-                    <span className="notification-date-admin" style={{ color: '#888' }}>📅 {notif.date}</span>
+                    <span className="notification-date-admin" style={{ color: 'var(--text-muted)' }}>📅 {notif.date}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '100px' }}>
-                  <button onClick={() => handleToggle(notif)} className="btn-action" style={{ background: '#00B894', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>📢 Publish</button>
+                  <button onClick={() => handleToggle(notif)} className="btn-action" style={{ background: '#00B894', color: 'var(--text)', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>📢 Publish</button>
                 </div>
               </div>
             ))}
@@ -2665,7 +2688,7 @@ function Admin() {
           position: 'fixed',
           top: 0, left: 0, right: 0,
           background: 'linear-gradient(135deg, #6c5ce7, #5a4bd1)',
-          color: 'white',
+          color: 'var(--text)',
           padding: '12px 20px',
           zIndex: 10000,
           display: 'flex',
@@ -2703,7 +2726,7 @@ function Admin() {
               style={{
                 padding: '6px 12px',
                 background: 'rgba(255,255,255,0.2)',
-                color: 'white',
+                color: 'var(--text)',
                 border: 'none',
                 borderRadius: '6px',
                 cursor: 'pointer',
@@ -2723,7 +2746,7 @@ function Admin() {
           top: showInstallBanner ? '56px' : '0',
           left: 0, right: 0,
           background: 'linear-gradient(135deg, #00B894, #00cec9)',
-          color: 'white',
+          color: 'var(--text)',
           padding: '8px 20px',
           zIndex: 9999,
           display: 'flex',

@@ -11,6 +11,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Somavamsha Aarya Kshthriya Samaj - Yadgir. Community management platform for member collections, expenditures, and samaj organization." />
     <meta name="theme-color" content="#800000" />
+    <meta name="theme-color" content="#2A1F18" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="SVAKS" />
@@ -18,6 +19,22 @@
     <link rel="manifest" href="/manifest.json" />
     <title>Somavamsha Aarya Kshthriya Samaj | Yadgir</title>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Playfair+Display:wght@400;500;600;700;800;900&family=Noto+Serif+Devanagari:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // Prevent theme & language flash-of-unstyled-content (FOUC).
+      // Runs synchronously before paint so the correct theme is applied on first render.
+      (function() {
+        try {
+          var theme = localStorage.getItem('svaks_theme');
+          if (theme === 'dark' || theme === 'light') {
+            document.documentElement.setAttribute('data-theme', theme);
+          }
+          var lang = localStorage.getItem('svaks_lang');
+          if (lang) {
+            document.documentElement.setAttribute('lang', lang);
+          }
+        } catch (e) { /* localStorage may be blocked */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

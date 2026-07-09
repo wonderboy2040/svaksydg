@@ -27,29 +27,49 @@ class ErrorBoundary extends React.Component {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(180deg, #1a0a00 0%, #2D1810 100%)',
-          color: 'white',
+          background: 'var(--clay-bg)',
+          color: 'var(--text)',
           fontFamily: 'Inter, sans-serif',
           padding: '20px',
           textAlign: 'center'
         }}>
-          <div style={{ fontSize: '64px', marginBottom: '20px' }}>ॐ</div>
-          <h1 style={{ color: '#D4A017', fontSize: '24px', marginBottom: '10px' }}>
+          <div style={{
+            fontSize: '64px',
+            marginBottom: '20px',
+            color: 'var(--gold)',
+            fontFamily: "'Tiro Devanagari Hindi', serif"
+          }}>ॐ</div>
+          <h1 style={{
+            color: 'var(--maroon)',
+            fontSize: '24px',
+            marginBottom: '10px',
+            fontFamily: "'Playfair Display', serif",
+            fontWeight: 800
+          }}>
             Something went wrong
           </h1>
-          <p style={{ color: '#aaa', marginBottom: '20px', maxWidth: '400px' }}>
+          <p style={{
+            color: 'var(--text-muted)',
+            marginBottom: '20px',
+            maxWidth: '400px',
+            fontSize: '15px',
+            lineHeight: 1.6
+          }}>
             {this.state.error?.message || 'An unexpected error occurred. Please refresh the page.'}
           </p>
           <button
             onClick={this.handleReload}
             style={{
-              padding: '12px 24px',
-              background: 'linear-gradient(135deg, #FF9933, #E8820C)',
+              padding: '13px 26px',
+              background: 'linear-gradient(135deg, var(--saffron), var(--gold))',
               border: 'none',
-              borderRadius: '8px',
+              borderRadius: '999px',
               color: 'white',
-              fontSize: '16px',
-              cursor: 'pointer'
+              fontSize: '15px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'Inter, sans-serif',
+              boxShadow: '4px 4px 12px rgba(232, 130, 12, 0.4), inset 1px 1px 2px rgba(255,255,255,0.4)'
             }}
           >
             Refresh Page

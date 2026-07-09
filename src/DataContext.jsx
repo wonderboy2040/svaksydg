@@ -442,14 +442,22 @@ export function DataProvider({ children }) {
         // POLL FOR CHANGES (every 15 seconds)
         // Uses a ref for syncVersion so the interval doesn't re-subscribe
         // on every data change (which would reset the timer constantly).
+        // Skips applying cloud data while a save is in-flight, so the user's
+        // optimistic local update isn't clobbered by a stale cloud snapshot.
         // ===================================
         const syncVersionRef = useRef(0);
+        const isSavingRef = useRef(false);
         useEffect(() => { syncVersionRef.current = data._syncVersion || 0; }, [data._syncVersion]);
+        useEffect(() => { isSavingRef.current = saving; }, [saving]);
 
         useEffect(() => {
                 if (!CLOUD_URL || !initialLoadDone) return;
 
                 const poll = async () => {
+                        // Skip polling while a save is in-flight — otherwise the cloud
+                        // (which hasn't received our update yet) overwrites our local state.
+                        if (isSavingRef.current) return;
+
                         const cloud = await fetchCloudData(false);
                         if (!cloud) return;
 
